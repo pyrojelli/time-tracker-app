@@ -143,7 +143,6 @@
                     if (tokenResponse.error) {
                         throw (tokenResponse);
                     }
-                    // After successful auth, show the calendar selection screen
                     showCalendarSelection();
                 },
             });
@@ -166,6 +165,16 @@
                 authorizeButton.textContent = 'Authorize Google Calendar';
             }
         }
+        
+        // **NEW** Gatekeeper function to ensure the calendar API is ready
+        async function getCalendarClient() {
+            if (!gapi.client.calendar) {
+                console.log("Calendar client not loaded. Loading now...");
+                await gapi.client.load('calendar', 'v3');
+            }
+            return gapi.client.calendar;
+        }
+
 
         // --- AUTHENTICATION & CALENDAR SELECTION FLOW ---
         authorizeButton.onclick = () => {
@@ -177,9 +186,9 @@
             calendarScreen.classList.remove('hidden');
 
             try {
-                // This is the critical step that was failing before
-                await gapi.client.load('calendar', 'v3');
-                const response = await gapi.client.calendar.calendarList.list();
+                // Use the new gatekeeper function
+                const calendarClient = await getCalendarClient();
+                const response = await calendarClient.calendarList.list();
                 const calendars = response.result.items;
                 
                 calendarSelect.innerHTML = '<option value="">-- Please choose a calendar --</option>'; // Clear previous options
@@ -326,8 +335,10 @@
                 'start': { 'dateTime': start.toISOString(), 'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone },
                 'end': { 'dateTime': end.toISOString(), 'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone },
             };
-
-            await gapi.client.calendar.events.insert({
+            
+            // Use the gatekeeper function here as well for safety
+            const calendarClient = await getCalendarClient();
+            await calendarClient.events.insert({
                 'calendarId': selectedCalendarId,
                 'resource': event,
             });
@@ -348,3 +359,4 @@
     </script>
 </body>
 </html>
+
