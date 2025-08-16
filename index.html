@@ -6,14 +6,78 @@
     <title>DA Time Tracker</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- **FIX** Removed async/defer to force synchronous loading -->
-    <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
-    <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
         .timer-display { font-variant-numeric: tabular-nums; }
     </style>
+    
+    <!-- **FIX** Moved the main script block into the head to ensure functions are defined before they are called -->
+    <script>
+        // --- CONFIGURATION ---
+        const CLIENT_ID = '933606932845-in28nuifari6nm10bujqgvrcllarc41b.apps.googleusercontent.com';
+        const API_KEY = 'YOUR_API_KEY'; // Optional but recommended
+        const CALENDAR_ID = 'ea8a510acb4eeaa186e9f9f39a2c5e9b342d8dd6773232b5ef7f3a020f61280b@group.calendar.google.com'; 
+        const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
+        const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
+
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+
+        // --- INITIALIZATION ---
+        function gapiLoaded() {
+            gapi.load('client', initializeGapiClient);
+        }
+
+        function gisLoaded() {
+            try {
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
+                    callback: (tokenResponse) => {
+                        if (tokenResponse.error) {
+                            throw (tokenResponse);
+                        }
+                        updateUI(true);
+                    },
+                });
+                gisInited = true;
+                maybeEnableButtons();
+            } catch (e) {
+                console.error("Error initializing Google Sign-In:", e);
+                document.getElementById('auth-message').textContent = "Error: Could not initialize Google Sign-In.";
+                document.getElementById('authorize_button').textContent = "Initialization Failed";
+            }
+        }
+
+        async function initializeGapiClient() {
+            try {
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: [DISCOVERY_DOC],
+                });
+                gapiInited = true;
+                maybeEnableButtons();
+            } catch (e) {
+                console.error("Error initializing Google API Client:", e);
+                document.getElementById('auth-message').textContent = "Error: Could not initialize Google API client.";
+                document.getElementById('authorize_button').textContent = "Initialization Failed";
+            }
+        }
+
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited) {
+                document.getElementById('authorize_button').disabled = false;
+                document.getElementById('authorize_button').textContent = 'Authorize Google Calendar';
+            }
+        }
+    </script>
+    
+    <!-- Load Google scripts after the main script block -->
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+
 </head>
 <body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 flex items-center justify-center min-h-screen p-4">
 
@@ -64,100 +128,63 @@
     </div>
 
     <script>
-        // --- CONFIGURATION ---
-        const CLIENT_ID = '933606932845-in28nuifari6nm10bujqgvrcllarc41b.apps.googleusercontent.com';
-        const API_KEY = 'YOUR_API_KEY'; // Optional but recommended
-        const CALENDAR_ID = 'ea8a510acb4eeaa186e9f9f39a2c5e9b342d8dd6773232b5ef7f3a020f61280b@group.calendar.google.com'; 
-        const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
-        const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
-
-        let tokenClient;
-        let gapiInited = false;
-        let gisInited = false;
-
-        // --- DOM ELEMENTS ---
-        const authScreen = document.getElementById('auth-screen');
-        const appScreen = document.getElementById('app-screen');
-        const authorizeButton = document.getElementById('authorize_button');
-        const authMessage = document.getElementById('auth-message');
-        const signoutButton = document.getElementById('signout_button');
-        const clockInBtn = document.getElementById('clock-in-btn');
-        const clockOutBtn = document.getElementById('clock-out-btn');
-        const projectNameInput = document.getElementById('project-name');
-        const timerDisplay = document.getElementById('timer-display');
-        const statusMessage = document.getElementById('status-message');
-        const messageBox = document.getElementById('message-box');
-        const messageText = document.getElementById('message-text');
-        const messageOkBtn = document.getElementById('message-ok-btn');
-
+        // DOM elements are now defined globally because the script is in the head
+        let authScreen, appScreen, authorizeButton, authMessage, signoutButton, clockInBtn, clockOutBtn, projectNameInput, timerDisplay, statusMessage, messageBox, messageText, messageOkBtn;
+        
         // --- APP STATE ---
         let timerInterval = null;
         let startTime = null;
         let isClockedIn = false;
 
-        // --- INITIALIZATION ---
-        function gapiLoaded() {
-            gapi.load('client', initializeGapiClient);
-        }
+        // This function runs after the document is fully loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            // Assign DOM elements now that they exist
+            authScreen = document.getElementById('auth-screen');
+            appScreen = document.getElementById('app-screen');
+            authorizeButton = document.getElementById('authorize_button');
+            authMessage = document.getElementById('auth-message');
+            signoutButton = document.getElementById('signout_button');
+            clockInBtn = document.getElementById('clock-in-btn');
+            clockOutBtn = document.getElementById('clock-out-btn');
+            projectNameInput = document.getElementById('project-name');
+            timerDisplay = document.getElementById('timer-display');
+            statusMessage = document.getElementById('status-message');
+            messageBox = document.getElementById('message-box');
+            messageText = document.getElementById('message-text');
+            messageOkBtn = document.getElementById('message-ok-btn');
 
-        function gisLoaded() {
-            try {
-                tokenClient = google.accounts.oauth2.initTokenClient({
-                    client_id: CLIENT_ID,
-                    scope: SCOPES,
-                    callback: (tokenResponse) => {
-                        if (tokenResponse.error) {
-                            throw (tokenResponse);
-                        }
-                        updateUI(true);
-                    },
-                });
-                gisInited = true;
-                maybeEnableButtons();
-            } catch (e) {
-                console.error("Error initializing Google Sign-In:", e);
-                authMessage.textContent = "Error: Could not initialize Google Sign-In.";
-                authorizeButton.textContent = "Initialization Failed";
-            }
-        }
+            // Attach event listeners
+            authorizeButton.onclick = () => {
+                 tokenClient.requestAccessToken({ prompt: 'consent' });
+            };
 
-        async function initializeGapiClient() {
-            try {
-                await gapi.client.init({
-                    apiKey: API_KEY,
-                    discoveryDocs: [DISCOVERY_DOC],
-                });
-                gapiInited = true;
-                maybeEnableButtons();
-            } catch (e) {
-                console.error("Error initializing Google API Client:", e);
-                authMessage.textContent = "Error: Could not initialize Google API client.";
-                authorizeButton.textContent = "Initialization Failed";
-            }
-        }
+            signoutButton.onclick = () => {
+                const token = gapi.client.getToken();
+                if (token !== null) {
+                    google.accounts.oauth2.revoke(token.access_token, () => {
+                        gapi.client.setToken('');
+                        updateUI(false);
+                    });
+                }
+            };
 
-        function maybeEnableButtons() {
-            if (gapiInited && gisInited) {
-                authorizeButton.disabled = false;
-                authorizeButton.textContent = 'Authorize Google Calendar';
-            }
-        }
+            clockInBtn.addEventListener('click', () => {
+                const projectName = projectNameInput.value.trim();
+                if (!projectName) {
+                    showMessage("Please enter a project name before clocking in.");
+                    return;
+                }
+                startTimer(projectName);
+            });
+
+            clockOutBtn.addEventListener('click', stopTimerAndCreateEvent);
+            
+            messageOkBtn.addEventListener('click', () => {
+                messageBox.classList.add('hidden');
+            });
+        });
 
         // --- AUTHENTICATION ---
-        authorizeButton.onclick = () => {
-             tokenClient.requestAccessToken({ prompt: 'consent' });
-        };
-
-        signoutButton.onclick = () => {
-            const token = gapi.client.getToken();
-            if (token !== null) {
-                google.accounts.oauth2.revoke(token.access_token, () => {
-                    gapi.client.setToken('');
-                    updateUI(false);
-                });
-            }
-        };
-
         function updateUI(isAuthorized) {
             if (isAuthorized) {
                 authScreen.classList.add('hidden');
@@ -173,17 +200,6 @@
         }
         
         // --- STOPWATCH LOGIC ---
-        clockInBtn.addEventListener('click', () => {
-            const projectName = projectNameInput.value.trim();
-            if (!projectName) {
-                showMessage("Please enter a project name before clocking in.");
-                return;
-            }
-            startTimer(projectName);
-        });
-
-        clockOutBtn.addEventListener('click', stopTimerAndCreateEvent);
-
         function startTimer(projectName) {
             startTime = new Date();
             isClockedIn = true;
@@ -278,9 +294,6 @@
             messageText.textContent = message;
             messageBox.classList.remove('hidden');
         }
-        messageOkBtn.addEventListener('click', () => {
-            messageBox.classList.add('hidden');
-        });
     </script>
 </body>
 </html>
