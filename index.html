@@ -72,7 +72,19 @@
     </div>
 
     <script>
+        // **NEW** Force the browser to unregister any old service workers.
+        // This is the key to breaking the cache and loading the new code.
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+              registration.unregister();
+              console.log('Old service worker unregistered.');
+            }
+          });
+        }
+
         // --- PWA Service Worker Registration ---
+        // We will re-register the correct one after the old one is gone.
         if ('serviceWorker' in navigator) {
           window.addEventListener('load', () => {
             navigator.serviceWorker.register('/service-worker.js').then(registration => {
@@ -86,7 +98,6 @@
         // --- CONFIGURATION ---
         const CLIENT_ID = '933606932845-in28nuifari6nm10bujqgvrcllarc41b.apps.googleusercontent.com';
         const API_KEY = 'YOUR_API_KEY'; // Optional but recommended
-        // **NEW** Paste your specific Calendar ID here
         const CALENDAR_ID = 'ea8a510acb4eeaa186e9f9f39a2c5e9b342d8dd6773232b5ef7f3a020f61280b@group.calendar.google.com'; 
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
@@ -216,10 +227,9 @@
             clockOutBtn.textContent = 'Saving...';
 
             try {
-                // Check if the user has provided a calendar ID
                 if (CALENDAR_ID === 'YOUR_CALENDAR_ID_HERE' || !CALENDAR_ID) {
                     showMessage("Error: Please provide your Calendar ID in the code.");
-                    return; // Stop execution if ID is missing
+                    return; 
                 }
                 await createCalendarEvent(startTime, endTime, projectName, durationMs);
                 showMessage(`Event created for "${projectName}"!`);
@@ -259,7 +269,6 @@
 
         // --- GOOGLE CALENDAR LOGIC ---
         async function createCalendarEvent(start, end, project, durationMs) {
-            // Ensure the calendar API is loaded before trying to use it.
             if (!gapi.client.calendar) {
                 await gapi.client.load('calendar', 'v3');
             }
@@ -276,7 +285,6 @@
                 'end': { 'dateTime': end.toISOString(), 'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone },
             };
             
-            // Use the specific Calendar ID provided by the user
             await gapi.client.calendar.events.insert({
                 'calendarId': CALENDAR_ID,
                 'resource': event,
