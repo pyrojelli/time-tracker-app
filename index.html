@@ -5,15 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DA Time Tracker</title>
     
-    <!-- PWA Manifest Link -->
-    <link rel="manifest" href="manifest.json">
-    <!-- Theme Color for PWA -->
-    <meta name="theme-color" content="#4f46e5">
-
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- **NEW** Added error handling for script loading -->
-    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()" onerror="handleScriptError()"></script>
-    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()" onerror="handleScriptError()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -73,27 +67,6 @@
     </div>
 
     <script>
-        // **NEW** Force the browser to unregister any old service workers.
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            for(let registration of registrations) {
-              registration.unregister();
-              console.log('Old service worker unregistered.');
-            }
-          });
-        }
-
-        // --- PWA Service Worker Registration ---
-        if ('serviceWorker' in navigator) {
-          window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/service-worker.js').then(registration => {
-              console.log('ServiceWorker registration successful with scope: ', registration.scope);
-            }, err => {
-              console.log('ServiceWorker registration failed: ', err);
-            });
-          });
-        }
-
         // --- CONFIGURATION ---
         const CLIENT_ID = '933606932845-in28nuifari6nm10bujqgvrcllarc41b.apps.googleusercontent.com';
         const API_KEY = 'YOUR_API_KEY'; // Optional but recommended
@@ -155,26 +128,10 @@
 
         function maybeEnableButtons() {
             if (gapiInited && gisInited) {
-                clearTimeout(initTimeout); // **NEW** Clear the timeout if successful
                 authorizeButton.disabled = false;
                 authorizeButton.textContent = 'Authorize Google Calendar';
             }
         }
-        
-        // **NEW** Handle cases where Google's scripts might fail to load
-        function handleScriptError() {
-            console.error("A Google script failed to load. Check your network connection and ad blockers.");
-            showMessage("Initialization failed. A required script could not be loaded. Please refresh and try again.");
-            authorizeButton.textContent = 'Loading Failed';
-        }
-        
-        // **NEW** Add a timeout to prevent getting stuck on "initializing"
-        const initTimeout = setTimeout(() => {
-            if (!gapiInited || !gisInited) {
-                showMessage("Initialization is taking too long. Please check your internet connection and refresh the page.");
-                authorizeButton.textContent = 'Initialization Timed Out';
-            }
-        }, 10000); // 10 seconds
 
         // --- AUTHENTICATION ---
         authorizeButton.onclick = () => {
