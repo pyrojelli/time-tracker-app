@@ -127,6 +127,8 @@
                 apiKey: API_KEY,
                 discoveryDocs: [DISCOVERY_DOC],
             });
+            // **FIX:** Explicitly load the calendar client library to prevent timing issues
+            await gapi.client.load('calendar', 'v3'); 
             gapiInited = true;
             maybeEnableButtons();
         }
