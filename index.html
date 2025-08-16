@@ -6,15 +6,12 @@
     <title>DA Time Tracker</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google scripts are now loaded via JavaScript at the bottom -->
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        .timer-display {
-            font-variant-numeric: tabular-nums;
-        }
+        body { font-family: 'Inter', sans-serif; }
+        .timer-display { font-variant-numeric: tabular-nums; }
     </style>
 </head>
 <body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 flex items-center justify-center min-h-screen p-4">
@@ -27,9 +24,9 @@
 
         <!-- Auth Screen -->
         <div id="auth-screen" class="text-center">
-            <p class="mb-4">Please authorize access to your Google Calendar to begin.</p>
-            <button id="authorize_button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105">
-                Authorize Google Calendar
+            <p id="auth-message" class="mb-4">Please authorize access to your Google Calendar to begin.</p>
+            <button id="authorize_button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105" disabled>
+                Initializing...
             </button>
         </div>
 
@@ -46,10 +43,10 @@
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button id="clock-in-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed">
+                <button id="clock-in-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition">
                     Clock In
                 </button>
-                <button id="clock-out-btn" disabled class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed">
+                <button id="clock-out-btn" disabled class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg disabled:bg-slate-400">
                     Clock Out
                 </button>
             </div>
@@ -81,6 +78,7 @@
         const authScreen = document.getElementById('auth-screen');
         const appScreen = document.getElementById('app-screen');
         const authorizeButton = document.getElementById('authorize_button');
+        const authMessage = document.getElementById('auth-message');
         const signoutButton = document.getElementById('signout_button');
         const clockInBtn = document.getElementById('clock-in-btn');
         const clockOutBtn = document.getElementById('clock-out-btn');
@@ -102,27 +100,39 @@
         }
 
         function gisLoaded() {
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: SCOPES,
-                callback: (tokenResponse) => {
-                    if (tokenResponse.error) {
-                        throw (tokenResponse);
-                    }
-                    updateUI(true);
-                },
-            });
-            gisInited = true;
-            maybeEnableButtons();
+            try {
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
+                    callback: (tokenResponse) => {
+                        if (tokenResponse.error) {
+                            throw (tokenResponse);
+                        }
+                        updateUI(true);
+                    },
+                });
+                gisInited = true;
+                maybeEnableButtons();
+            } catch (e) {
+                console.error("Error initializing Google Sign-In:", e);
+                authMessage.textContent = "Error: Could not initialize Google Sign-In.";
+                authorizeButton.textContent = "Initialization Failed";
+            }
         }
 
         async function initializeGapiClient() {
-            await gapi.client.init({
-                apiKey: API_KEY,
-                discoveryDocs: [DISCOVERY_DOC],
-            });
-            gapiInited = true;
-            maybeEnableButtons();
+            try {
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: [DISCOVERY_DOC],
+                });
+                gapiInited = true;
+                maybeEnableButtons();
+            } catch (e) {
+                console.error("Error initializing Google API Client:", e);
+                authMessage.textContent = "Error: Could not initialize Google API client.";
+                authorizeButton.textContent = "Initialization Failed";
+            }
         }
 
         function maybeEnableButtons() {
@@ -176,7 +186,7 @@
         function startTimer(projectName) {
             startTime = new Date();
             isClockedIn = true;
-            clockInBtn.disabled = true;
+            clockInBtn.disabled = false;
             clockOutBtn.disabled = false;
             projectNameInput.disabled = true;
             statusMessage.textContent = `Clocked in for: ${projectName}`;
@@ -270,31 +280,6 @@
         messageOkBtn.addEventListener('click', () => {
             messageBox.classList.add('hidden');
         });
-
-        // --- **NEW** ROBUST SCRIPT LOADING ---
-        function loadScript(src, onload, onerror) {
-            const script = document.createElement('script');
-            script.src = src;
-            script.async = true;
-            script.defer = true;
-            script.onload = onload;
-            script.onerror = onerror;
-            document.head.appendChild(script);
-        }
-
-        function handleScriptError() {
-            console.error("A Google script failed to load. Check network and ad blockers.");
-            showMessage("Initialization failed. A required script could not be loaded. Please refresh.");
-            authorizeButton.textContent = 'Loading Failed';
-        }
-
-        // Load scripts when the main window loads, ensuring the DOM is ready.
-        window.onload = function() {
-            authorizeButton.disabled = true;
-            authorizeButton.textContent = 'Initializing...';
-            loadScript('https://accounts.google.com/gsi/client', gisLoaded, handleScriptError);
-            loadScript('https://apis.google.com/js/api.js', gapiLoaded, handleScriptError);
-        };
     </script>
 </body>
 </html>
