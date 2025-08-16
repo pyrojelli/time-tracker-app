@@ -6,8 +6,7 @@
     <title>DA Time Tracker</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
-    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <!-- Google scripts are now loaded via JavaScript at the bottom -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -272,9 +271,30 @@
             messageBox.classList.add('hidden');
         });
 
-        // Initial setup
-        authorizeButton.disabled = true;
-        authorizeButton.textContent = 'Initializing...';
+        // --- **NEW** ROBUST SCRIPT LOADING ---
+        function loadScript(src, onload, onerror) {
+            const script = document.createElement('script');
+            script.src = src;
+            script.async = true;
+            script.defer = true;
+            script.onload = onload;
+            script.onerror = onerror;
+            document.head.appendChild(script);
+        }
+
+        function handleScriptError() {
+            console.error("A Google script failed to load. Check network and ad blockers.");
+            showMessage("Initialization failed. A required script could not be loaded. Please refresh.");
+            authorizeButton.textContent = 'Loading Failed';
+        }
+
+        // Load scripts when the main window loads, ensuring the DOM is ready.
+        window.onload = function() {
+            authorizeButton.disabled = true;
+            authorizeButton.textContent = 'Initializing...';
+            loadScript('https://accounts.google.com/gsi/client', gisLoaded, handleScriptError);
+            loadScript('https://apis.google.com/js/api.js', gapiLoaded, handleScriptError);
+        };
     </script>
 </body>
 </html>
