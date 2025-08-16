@@ -11,8 +11,9 @@
     <meta name="theme-color" content="#4f46e5">
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
-    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <!-- **NEW** Added error handling for script loading -->
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()" onerror="handleScriptError()"></script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()" onerror="handleScriptError()"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -73,7 +74,6 @@
 
     <script>
         // **NEW** Force the browser to unregister any old service workers.
-        // This is the key to breaking the cache and loading the new code.
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.getRegistrations().then(function(registrations) {
             for(let registration of registrations) {
@@ -84,7 +84,6 @@
         }
 
         // --- PWA Service Worker Registration ---
-        // We will re-register the correct one after the old one is gone.
         if ('serviceWorker' in navigator) {
           window.addEventListener('load', () => {
             navigator.serviceWorker.register('/service-worker.js').then(registration => {
@@ -156,10 +155,26 @@
 
         function maybeEnableButtons() {
             if (gapiInited && gisInited) {
+                clearTimeout(initTimeout); // **NEW** Clear the timeout if successful
                 authorizeButton.disabled = false;
                 authorizeButton.textContent = 'Authorize Google Calendar';
             }
         }
+        
+        // **NEW** Handle cases where Google's scripts might fail to load
+        function handleScriptError() {
+            console.error("A Google script failed to load. Check your network connection and ad blockers.");
+            showMessage("Initialization failed. A required script could not be loaded. Please refresh and try again.");
+            authorizeButton.textContent = 'Loading Failed';
+        }
+        
+        // **NEW** Add a timeout to prevent getting stuck on "initializing"
+        const initTimeout = setTimeout(() => {
+            if (!gapiInited || !gisInited) {
+                showMessage("Initialization is taking too long. Please check your internet connection and refresh the page.");
+                authorizeButton.textContent = 'Initialization Timed Out';
+            }
+        }, 10000); // 10 seconds
 
         // --- AUTHENTICATION ---
         authorizeButton.onclick = () => {
