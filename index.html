@@ -84,12 +84,8 @@
         }
 
         // --- CONFIGURATION ---
-        // IMPORTANT: You must get your own Client ID from Google Cloud Console.
-        const CLIENT_ID = '933606932845-in28nuifari6nm10bujqgvrcllarc41b.apps.googleusercontent.com'; // <-- PASTE YOUR CLIENT ID HERE
-
-        // The API key is not strictly necessary for OAuth but can be useful for certain unauthenticated calls.
-        const API_KEY = 'YOUR_API_KEY'; // <-- PASTE YOUR API KEY HERE (Optional but recommended)
-        
+        const CLIENT_ID = '933606932845-in28nuifari6nm10bujqgvrcllarc41b.apps.googleusercontent.com';
+        const API_KEY = 'YOUR_API_KEY'; // Optional but recommended
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly';
         const CALENDAR_NAME = 'DataAnnotation';
@@ -123,29 +119,38 @@
         }
 
         async function initializeGapiClient() {
-            await gapi.client.init({
-                apiKey: API_KEY,
-                discoveryDocs: [DISCOVERY_DOC],
-            });
-            // **FIX:** Explicitly load the calendar client library to prevent timing issues
-            await gapi.client.load('calendar', 'v3'); 
-            gapiInited = true;
-            maybeEnableButtons();
+            try {
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: [DISCOVERY_DOC],
+                });
+                gapiInited = true;
+                maybeEnableButtons();
+            } catch (error) {
+                console.error("Error initializing GAPI client", error);
+                showMessage("Could not initialize Google API. Check console.");
+            }
         }
 
         function gisLoaded() {
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: SCOPES,
-                callback: '', // defined later
-            });
-            gisInited = true;
-            maybeEnableButtons();
+            try {
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
+                    callback: '', // Will be set later
+                });
+                gisInited = true;
+                maybeEnableButtons();
+            } catch (error) {
+                console.error("Error initializing GIS client", error);
+                showMessage("Could not initialize Google Sign-In. Check console.");
+            }
         }
 
         function maybeEnableButtons() {
             if (gapiInited && gisInited) {
-                authorizeButton.style.display = 'block';
+                authorizeButton.disabled = false;
+                authorizeButton.textContent = 'Authorize Google Calendar';
             }
         }
 
@@ -154,26 +159,30 @@
         signoutButton.onclick = handleSignoutClick;
 
         function handleAuthClick() {
-            tokenClient.callback = async (resp) => {
-                if (resp.error !== undefined) {
-                    throw (resp);
+            tokenClient.callback = (tokenResponse) => {
+                if (tokenResponse.error) {
+                    throw (tokenResponse);
                 }
+                // No action needed here, the token is now stored.
+                // We will check for it and use it when we need it.
+                console.log("Authorization successful.");
                 updateUI(true);
             };
 
             if (gapi.client.getToken() === null) {
-                tokenClient.requestAccessToken({prompt: 'consent'});
+                tokenClient.requestAccessToken({ prompt: 'consent' });
             } else {
-                tokenClient.requestAccessToken({prompt: ''});
+                tokenClient.requestAccessToken({ prompt: '' });
             }
         }
 
         function handleSignoutClick() {
             const token = gapi.client.getToken();
             if (token !== null) {
-                google.accounts.oauth2.revoke(token.access_token);
-                gapi.client.setToken('');
-                updateUI(false);
+                google.accounts.oauth2.revoke(token.access_token, () => {
+                    gapi.client.setToken('');
+                    updateUI(false);
+                });
             }
         }
 
@@ -185,13 +194,12 @@
                 authScreen.classList.remove('hidden');
                 appScreen.classList.add('hidden');
                 if (isClockedIn) {
-                    // If user signs out while clocked in, stop the timer without creating an event.
                     clearInterval(timerInterval);
                     resetState();
                 }
             }
         }
-
+        
         // --- STOPWATCH LOGIC ---
         clockInBtn.addEventListener('click', () => {
             const projectName = projectNameInput.value.trim();
@@ -202,24 +210,21 @@
             startTimer(projectName);
         });
 
-        clockOutBtn.addEventListener('click', stopTimer);
+        clockOutBtn.addEventListener('click', stopTimerAndCreateEvent);
 
         function startTimer(projectName) {
             startTime = new Date();
             isClockedIn = true;
-
             clockInBtn.disabled = true;
             clockOutBtn.disabled = false;
             projectNameInput.disabled = true;
-
             statusMessage.textContent = `Clocked in for: ${projectName}`;
             statusMessage.classList.add('text-green-500');
-
             timerInterval = setInterval(updateTimerDisplay, 1000);
-            updateTimerDisplay(); // Initial call
+            updateTimerDisplay();
         }
 
-        async function stopTimer() {
+        async function stopTimerAndCreateEvent() {
             if (!isClockedIn) return;
             
             const endTime = new Date();
@@ -228,32 +233,46 @@
             const projectName = projectNameInput.value.trim();
             const durationMs = endTime - startTime;
             
-            // Show loading state
             clockOutBtn.disabled = true;
             clockOutBtn.textContent = 'Saving...';
 
             try {
+                // **NEW ROBUST APPROACH**
+                // This function now ensures we have a valid token right before we need it.
+                await ensureGapiClientReady();
                 await createCalendarEvent(startTime, endTime, projectName, durationMs);
                 showMessage(`Event created for "${projectName}"!`);
             } catch (error) {
-                console.error('Error creating calendar event:', error);
-                showMessage(`Failed to create calendar event. Please check console for details. Error: ${error.result?.error?.message || error.message}`);
+                console.error('Full error object:', error);
+                const errorMessage = error.result?.error?.message || error.message || 'An unknown error occurred.';
+                showMessage(`Failed to create calendar event. Error: ${errorMessage}`);
             } finally {
                 clockOutBtn.textContent = 'Clock Out';
                 resetState();
             }
         }
         
+        // **NEW FUNCTION** This is the core of the fix.
+        // It checks if the calendar API is loaded and ready. If not, it loads it.
+        async function ensureGapiClientReady() {
+            // Check if the calendar client library is already loaded.
+            if (!gapi.client.calendar) {
+                console.log("Calendar client not loaded. Loading now...");
+                await gapi.client.load('calendar', 'v3');
+                console.log("Calendar client loaded successfully.");
+            } else {
+                console.log("Calendar client was already loaded.");
+            }
+        }
+
         function resetState() {
             isClockedIn = false;
             startTime = null;
             timerInterval = null;
-
             clockInBtn.disabled = false;
             clockOutBtn.disabled = true;
             projectNameInput.disabled = false;
             projectNameInput.value = '';
-            
             timerDisplay.textContent = '00:00:00';
             statusMessage.textContent = 'Ready to clock in.';
             statusMessage.classList.remove('text-green-500');
@@ -263,28 +282,22 @@
             if (!startTime) return;
             const now = new Date();
             const diff = now - startTime;
-
             const hours = Math.floor(diff / 3600000);
             const minutes = Math.floor((diff % 3600000) / 60000);
             const seconds = Math.floor((diff % 60000) / 1000);
-
             timerDisplay.textContent = 
                 `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
         }
 
         // --- GOOGLE CALENDAR LOGIC ---
         async function getOrCreateCalendar() {
-            // 1. List user's calendars
             const response = await gapi.client.calendar.calendarList.list();
             const calendars = response.result.items;
-            
-            // 2. Find the calendar by name
             let targetCalendar = calendars.find(cal => cal.summary === CALENDAR_NAME);
 
             if (targetCalendar) {
                 return targetCalendar.id;
             } else {
-                // 3. If not found, create it
                 showMessage(`Calendar "${CALENDAR_NAME}" not found. Creating it now...`);
                 const createResponse = await gapi.client.calendar.calendars.insert({
                     summary: CALENDAR_NAME,
@@ -300,28 +313,19 @@
             const totalMinutes = Math.floor(durationMs / 60000);
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
-            
             const eventTitle = `${project} - ${hours} hrs ${minutes} min`;
 
             const event = {
                 'summary': eventTitle,
                 'description': 'Time tracked via Data Annotation Time Tracker.',
-                'start': {
-                    'dateTime': start.toISOString(),
-                    'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone,
-                },
-                'end': {
-                    'dateTime': end.toISOString(),
-                    'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone,
-                },
+                'start': { 'dateTime': start.toISOString(), 'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone },
+                'end': { 'dateTime': end.toISOString(), 'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone },
             };
 
-            const request = gapi.client.calendar.events.insert({
+            await gapi.client.calendar.events.insert({
                 'calendarId': calendarId,
                 'resource': event,
             });
-
-            await request;
         }
 
         // --- UTILITY ---
@@ -329,11 +333,13 @@
             messageText.textContent = message;
             messageBox.classList.remove('hidden');
         }
-
         messageOkBtn.addEventListener('click', () => {
             messageBox.classList.add('hidden');
         });
 
+        // Initial setup
+        authorizeButton.disabled = true;
+        authorizeButton.textContent = 'Initializing...';
     </script>
 </body>
 </html>
