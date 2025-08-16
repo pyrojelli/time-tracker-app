@@ -39,6 +39,20 @@
             </button>
         </div>
 
+        <!-- Calendar Selection Screen -->
+        <div id="calendar-screen" class="hidden text-center">
+             <div class="mb-4">
+                <label for="calendar-select" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Select a Calendar</label>
+                <select id="calendar-select" class="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                    <option value="">Loading calendars...</option>
+                </select>
+            </div>
+            <button id="confirm-calendar-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 disabled:bg-slate-400" disabled>
+                Continue
+            </button>
+        </div>
+
+
         <!-- Main App Screen -->
         <div id="app-screen" class="hidden">
             <div class="mb-6">
@@ -88,7 +102,6 @@
         const API_KEY = 'YOUR_API_KEY'; // Optional but recommended
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly';
-        const CALENDAR_NAME = 'DataAnnotation';
 
         let tokenClient;
         let gapiInited = false;
@@ -96,8 +109,11 @@
 
         // --- DOM ELEMENTS ---
         const authScreen = document.getElementById('auth-screen');
+        const calendarScreen = document.getElementById('calendar-screen');
         const appScreen = document.getElementById('app-screen');
         const authorizeButton = document.getElementById('authorize_button');
+        const calendarSelect = document.getElementById('calendar-select');
+        const confirmCalendarBtn = document.getElementById('confirm-calendar-btn');
         const signoutButton = document.getElementById('signout_button');
         const clockInBtn = document.getElementById('clock-in-btn');
         const clockOutBtn = document.getElementById('clock-out-btn');
@@ -112,6 +128,7 @@
         let timerInterval = null;
         let startTime = null;
         let isClockedIn = false;
+        let selectedCalendarId = null;
 
         // --- INITIALIZATION ---
         function gapiLoaded() {
@@ -126,10 +143,8 @@
                     if (tokenResponse.error) {
                         throw (tokenResponse);
                     }
-                    // **NEW:** After successful auth, immediately load the calendar API
-                    loadCalendarApi().then(() => {
-                        updateUI(true);
-                    });
+                    // After successful auth, show the calendar selection screen
+                    showCalendarSelection();
                 },
             });
             gisInited = true;
@@ -145,17 +160,6 @@
             maybeEnableButtons();
         }
 
-        // **NEW FUNCTION** This is the core of the fix. It's now a standalone function.
-        async function loadCalendarApi() {
-            try {
-                await gapi.client.load('calendar', 'v3');
-                console.log("Calendar client loaded successfully.");
-            } catch (error) {
-                console.error("Error loading calendar client", error);
-                showMessage("Failed to load Google Calendar API.");
-            }
-        }
-
         function maybeEnableButtons() {
             if (gapiInited && gisInited) {
                 authorizeButton.disabled = false;
@@ -163,43 +167,73 @@
             }
         }
 
-        // --- AUTHENTICATION ---
-        authorizeButton.onclick = handleAuthClick;
-        signoutButton.onclick = handleSignoutClick;
+        // --- AUTHENTICATION & CALENDAR SELECTION FLOW ---
+        authorizeButton.onclick = () => {
+             tokenClient.requestAccessToken({ prompt: 'consent' });
+        };
 
-        function handleAuthClick() {
-            if (gapi.client.getToken() === null) {
-                // Prompt the user to select an account and grant access.
-                tokenClient.requestAccessToken({ prompt: 'consent' });
-            } else {
-                // Skip display of account chooser and grant consent dialog.
-                tokenClient.requestAccessToken({ prompt: '' });
+        async function showCalendarSelection() {
+            authScreen.classList.add('hidden');
+            calendarScreen.classList.remove('hidden');
+
+            try {
+                // This is the critical step that was failing before
+                await gapi.client.load('calendar', 'v3');
+                const response = await gapi.client.calendar.calendarList.list();
+                const calendars = response.result.items;
+                
+                calendarSelect.innerHTML = '<option value="">-- Please choose a calendar --</option>'; // Clear previous options
+                
+                calendars.forEach(calendar => {
+                    if (calendar.accessRole === 'owner' || calendar.accessRole === 'writer') {
+                        const option = document.createElement('option');
+                        option.value = calendar.id;
+                        option.textContent = calendar.summary;
+                        calendarSelect.appendChild(option);
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error fetching calendar list:', error);
+                showMessage(`Failed to fetch calendars. Error: ${error.result?.error?.message || error.message}`);
+                // Go back to auth screen on failure
+                authScreen.classList.remove('hidden');
+                calendarScreen.classList.add('hidden');
             }
         }
 
-        function handleSignoutClick() {
+        calendarSelect.onchange = () => {
+            if (calendarSelect.value) {
+                confirmCalendarBtn.disabled = false;
+            } else {
+                confirmCalendarBtn.disabled = true;
+            }
+        };
+
+        confirmCalendarBtn.onclick = () => {
+            selectedCalendarId = calendarSelect.value;
+            if (selectedCalendarId) {
+                calendarScreen.classList.add('hidden');
+                appScreen.classList.remove('hidden');
+            }
+        };
+
+        signoutButton.onclick = () => {
             const token = gapi.client.getToken();
             if (token !== null) {
                 google.accounts.oauth2.revoke(token.access_token, () => {
                     gapi.client.setToken('');
-                    updateUI(false);
+                    // Reset to the very beginning
+                    appScreen.classList.add('hidden');
+                    calendarScreen.classList.add('hidden');
+                    authScreen.classList.remove('hidden');
+                    if (isClockedIn) {
+                        clearInterval(timerInterval);
+                        resetState();
+                    }
                 });
             }
-        }
-
-        function updateUI(isAuthorized) {
-            if (isAuthorized) {
-                authScreen.classList.add('hidden');
-                appScreen.classList.remove('hidden');
-            } else {
-                authScreen.classList.remove('hidden');
-                appScreen.classList.add('hidden');
-                if (isClockedIn) {
-                    clearInterval(timerInterval);
-                    resetState();
-                }
-            }
-        }
+        };
         
         // --- STOPWATCH LOGIC ---
         clockInBtn.addEventListener('click', () => {
@@ -238,8 +272,6 @@
             clockOutBtn.textContent = 'Saving...';
 
             try {
-                // **REMOVED** The check is now part of the authorization flow.
-                // await ensureGapiClientReady(); 
                 await createCalendarEvent(startTime, endTime, projectName, durationMs);
                 showMessage(`Event created for "${projectName}"!`);
             } catch (error) {
@@ -277,25 +309,11 @@
         }
 
         // --- GOOGLE CALENDAR LOGIC ---
-        async function getOrCreateCalendar() {
-            const response = await gapi.client.calendar.calendarList.list();
-            const calendars = response.result.items;
-            let targetCalendar = calendars.find(cal => cal.summary === CALENDAR_NAME);
-
-            if (targetCalendar) {
-                return targetCalendar.id;
-            } else {
-                showMessage(`Calendar "${CALENDAR_NAME}" not found. Creating it now...`);
-                const createResponse = await gapi.client.calendar.calendars.insert({
-                    summary: CALENDAR_NAME,
-                });
-                showMessage(`Calendar "${CALENDAR_NAME}" created successfully.`);
-                return createResponse.result.id;
-            }
-        }
-        
         async function createCalendarEvent(start, end, project, durationMs) {
-            const calendarId = await getOrCreateCalendar();
+            if (!selectedCalendarId) {
+                showMessage("Error: No calendar selected.");
+                return;
+            }
             
             const totalMinutes = Math.floor(durationMs / 60000);
             const hours = Math.floor(totalMinutes / 60);
@@ -310,7 +328,7 @@
             };
 
             await gapi.client.calendar.events.insert({
-                'calendarId': calendarId,
+                'calendarId': selectedCalendarId,
                 'resource': event,
             });
         }
@@ -330,3 +348,4 @@
     </script>
 </body>
 </html>
+
