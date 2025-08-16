@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DA Time Tracker</title>
+    
+    <!-- PWA Manifest Link -->
+    <link rel="manifest" href="manifest.json">
+    <!-- Theme Color for PWA -->
+    <meta name="theme-color" content="#4f46e5">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
@@ -66,18 +72,22 @@
     </div>
 
     <script>
+        // --- PWA Service Worker Registration ---
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/service-worker.js').then(registration => {
+              console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            }, err => {
+              console.log('ServiceWorker registration failed: ', err);
+            });
+          });
+        }
+
         // --- CONFIGURATION ---
         // IMPORTANT: You must get your own Client ID from Google Cloud Console.
-        // 1. Go to https://console.cloud.google.com/
-        // 2. Create a new project.
-        // 3. Go to "APIs & Services" > "Credentials".
-        // 4. Create "OAuth 2.0 Client IDs", select "Web application".
-        // 5. Under "Authorized JavaScript origins", add the URL where you'll host this (e.g., http://localhost, https://your-github-username.github.io). For local testing, you can add `http://localhost` and `http://127.0.0.1`.
-        // 6. Copy the Client ID and paste it below.
         const CLIENT_ID = '933606932845-in28nuifari6nm10bujqgvrcllarc41b.apps.googleusercontent.com'; // <-- PASTE YOUR CLIENT ID HERE
 
         // The API key is not strictly necessary for OAuth but can be useful for certain unauthenticated calls.
-        // It's recommended to create one in the same "Credentials" page.
         const API_KEY = 'YOUR_API_KEY'; // <-- PASTE YOUR API KEY HERE (Optional but recommended)
         
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
@@ -325,4 +335,3 @@
     </script>
 </body>
 </html>
-
