@@ -1,0 +1,21 @@
+{
+  "name": "Data Annotation Time Tracker",
+  "short_name": "DA Tracker",
+  "description": "A simple stopwatch to track time for Data Annotation projects and log it to Google Calendar.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "https://placehold.co/192x192/4f46e5/white?text=DA",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://placehold.co/512x512/4f46e5/white?text=DA",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
