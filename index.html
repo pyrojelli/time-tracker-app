@@ -32,7 +32,7 @@
         let postAuthAction = null;
 
         // --- AUDIO SETUP ---
-        let synth, audioReady = false;
+        let synth, audioReady = false, alarmInterval = null;
 
         // --- INITIALIZATION ---
         function gapiLoaded() { gapi.load('client', initializeGapiClient); }
@@ -165,26 +165,35 @@
         let emojiPickerBtn, emojiModal, emojiGrid;
         let breakModal, breakOptions, cancelBreakSelectionBtn;
         
-        let timerInterval = null, startTime = null, isClockedIn = false, isOnBreak = false, breakStartTime = null, totalBreakTime = 0, pendingSaveData = null, selectedEmoji = null;
+        let timerInterval = null, startTime = null, isClockedIn = false, breakStartTime = null, totalBreakTime = 0, pendingSaveData = null, selectedEmoji = null;
         let breakInterval = null, breakTimeLeft = 0;
+        let breakState = 'idle'; // 'idle', 'active', 'finished'
 
         document.addEventListener('DOMContentLoaded', () => {
             // Assign DOM elements
-            Object.assign(window, {
-                clockInBtn: document.getElementById('clock-in-btn'), clockOutBtn: document.getElementById('clock-out-btn'),
-                projectNameInput: document.getElementById('project-name'), timerDisplay: document.getElementById('timer-display'),
-                statusMessage: document.getElementById('status-message'), messageBox: document.getElementById('message-box'),
-                messageText: document.getElementById('message-text'), messageOkBtn: document.getElementById('message-ok-btn'),
-                breakBtn: document.getElementById('break-btn'), breakTimerDisplay: document.getElementById('break-timer-display'),
-                editTimeModal: document.getElementById('edit-time-modal'), editProjectName: document.getElementById('edit-project-name'),
-                editHoursInput: document.getElementById('edit-hours'), editMinutesInput: document.getElementById('edit-minutes'),
-                saveEventBtn: document.getElementById('save-event-btn'), cancelEditBtn: document.getElementById('cancel-edit-btn'),
-                emojiPickerBtn: document.getElementById('emoji-picker-btn'), emojiModal: document.getElementById('emoji-modal'),
-                emojiGrid: document.getElementById('emoji-grid'),
-                breakModal: document.getElementById('break-modal'), breakOptions: document.getElementById('break-options'),
-                cancelBreakSelectionBtn: document.getElementById('cancel-break-selection-btn')
-            });
-
+            clockInBtn = document.getElementById('clock-in-btn');
+            clockOutBtn = document.getElementById('clock-out-btn');
+            projectNameInput = document.getElementById('project-name');
+            timerDisplay = document.getElementById('timer-display');
+            statusMessage = document.getElementById('status-message');
+            messageBox = document.getElementById('message-box');
+            messageText = document.getElementById('message-text');
+            messageOkBtn = document.getElementById('message-ok-btn');
+            breakBtn = document.getElementById('break-btn');
+            breakTimerDisplay = document.getElementById('break-timer-display');
+            editTimeModal = document.getElementById('edit-time-modal');
+            editProjectName = document.getElementById('edit-project-name');
+            editHoursInput = document.getElementById('edit-hours');
+            editMinutesInput = document.getElementById('edit-minutes');
+            saveEventBtn = document.getElementById('save-event-btn');
+            cancelEditBtn = document.getElementById('cancel-edit-btn');
+            emojiPickerBtn = document.getElementById('emoji-picker-btn');
+            emojiModal = document.getElementById('emoji-modal');
+            emojiGrid = document.getElementById('emoji-grid');
+            breakModal = document.getElementById('break-modal');
+            breakOptions = document.getElementById('break-options');
+            cancelBreakSelectionBtn = document.getElementById('cancel-break-selection-btn');
+            
             // Attach Event Listeners
             clockInBtn.addEventListener('click', startTimer);
             clockOutBtn.addEventListener('click', stopTimerAndShowEditModal);
@@ -213,9 +222,26 @@
             const now = Tone.now();
             if (type === 'click') synth.triggerAttackRelease("C4", "8n", now);
             if (type === 'confirm') synth.triggerAttackRelease("G4", "8n", now);
-            if (type === 'bell') {
-                synth.triggerAttackRelease("A5", "8n", now);
-                synth.triggerAttackRelease("E5", "8n", now + 0.1, 0.7);
+            if (type === 'alarm') {
+                 if (alarmInterval) return; // Prevent multiple alarms
+                 alarmInterval = setInterval(() => {
+                     const alarmSynth = new Tone.Synth().toDestination();
+                     const now = Tone.now();
+                     alarmSynth.triggerAttackRelease("A5", "16n", now);
+                     alarmSynth.triggerAttackRelease("E5", "16n", now + 0.1);
+                 }, 400);
+
+                 // Stop the alarm after 10 seconds.
+                 setTimeout(() => {
+                     stopSound('alarm');
+                 }, 10000); 
+            }
+        }
+        
+        function stopSound(type) {
+            if (type === 'alarm' && alarmInterval) {
+                clearInterval(alarmInterval);
+                alarmInterval = null;
             }
         }
 
@@ -269,19 +295,19 @@
 
         function handleBreak() {
             playSound('click');
-            if (isOnBreak) {
-                // End break early
-                endBreak();
-            } else {
-                // Show break options
+            if (breakState === 'idle') {
                 breakModal.classList.remove('hidden');
+            } else if (breakState === 'active') {
+                endBreak(true); // Manually ended early
+            } else if (breakState === 'finished') {
+                resumeWork();
             }
         }
         
         function startBreak(minutes) {
             playSound('confirm');
             breakModal.classList.add('hidden');
-            isOnBreak = true;
+            breakState = 'active';
             breakStartTime = new Date();
             clearInterval(timerInterval); // Pause main timer
 
@@ -294,22 +320,37 @@
             statusMessage.textContent = "On Break";
         }
         
-        function endBreak() {
-            isOnBreak = false;
+        function endBreak(isManual) {
             if (breakStartTime) {
                  totalBreakTime += new Date() - breakStartTime;
             }
             breakStartTime = null;
-
             clearInterval(breakInterval);
+            
+            if (isManual) {
+                resumeWork();
+            } else {
+                 // Break finished naturally, now wait for user
+                breakState = 'finished';
+                playSound('alarm');
+                statusMessage.textContent = "Break's Over!";
+                breakTimerDisplay.textContent = '00:00';
+                breakBtn.textContent = 'Resume Work';
+                breakBtn.classList.replace('bg-yellow-500', 'bg-green-500');
+                breakBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-green-600');
+            }
+        }
+        
+        function resumeWork() {
+            stopSound('alarm');
+            breakState = 'idle';
             breakTimerDisplay.textContent = '';
             
             breakBtn.textContent = 'Start Break';
-            breakBtn.classList.replace('bg-yellow-500', 'bg-sky-500');
-            breakBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-sky-600');
-            
-            statusMessage.textContent = `Clocked in for: ${selectedEmoji ? selectedEmoji + ' ' : ''}${projectNameInput.value.trim()}`;
+            breakBtn.classList.remove('bg-yellow-500', 'bg-green-500', 'hover:bg-yellow-600', 'hover:bg-green-600');
+            breakBtn.classList.add('bg-sky-500', 'hover:bg-sky-600');
 
+            statusMessage.textContent = `Clocked in for: ${selectedEmoji ? selectedEmoji + ' ' : ''}${projectNameInput.value.trim()}`;
             timerInterval = setInterval(updateTimerDisplay, 1000); // Resume main timer
         }
         
@@ -320,16 +361,22 @@
             breakTimerDisplay.textContent = `Break ends in: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
             if (breakTimeLeft <= 0) {
-                playSound('bell');
-                endBreak();
+                endBreak(false); // Finished naturally
             }
         }
 
         function stopTimerAndShowEditModal() {
             if (!isClockedIn) return;
             playSound('confirm');
-            if (isOnBreak) endBreak(); // End any active break first
+            // If on break, finalize break time before stopping
+            if (breakState === 'active' || breakState === 'finished') {
+                stopSound('alarm');
+                if (breakStartTime) {
+                    totalBreakTime += new Date() - breakStartTime;
+                }
+            }
             clearInterval(timerInterval);
+            clearInterval(breakInterval);
             
             const endTime = new Date();
             
@@ -360,7 +407,7 @@
                     await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
                     showMessage(`Event created for "${pendingSaveData.projectName}"!`);
                     playSound('bell');
-                } catch (error) {
+                } catch (error {
                     console.error('Full error object:', error);
                     const errorMessage = error.result?.error?.message || error.message || 'Unknown error.';
                     showMessage(`Failed to create event. Error: ${errorMessage}`);
@@ -374,7 +421,7 @@
 
         function resetState() {
             isClockedIn = false;
-            isOnBreak = false;
+            breakState = 'idle';
             startTime = null;
             breakStartTime = null;
             timerInterval = null;
@@ -383,6 +430,7 @@
             pendingSaveData = null;
             selectedEmoji = null;
             
+            stopSound('alarm');
             clearInterval(timerInterval);
             clearInterval(breakInterval);
 
@@ -392,6 +440,8 @@
             emojiPickerBtn.disabled = false;
             breakBtn.disabled = true;
             breakBtn.textContent = 'Start Break';
+            breakBtn.classList.remove('bg-yellow-500', 'bg-green-500', 'hover:bg-yellow-600', 'hover:bg-green-600');
+            breakBtn.classList.add('bg-sky-500', 'hover:bg-sky-600');
             
             projectNameInput.value = '';
             emojiPickerBtn.textContent = '🎨';
@@ -403,8 +453,8 @@
 
         function updateTimerDisplay() {
             if (!startTime) return;
-            const currentBreakDuration = isOnBreak ? (new Date() - breakStartTime) : 0;
-            const workedTime = (new Date() - startTime) - totalBreakTime - currentBreakDuration;
+            // This timer only runs when not on break, so we only need totalBreakTime
+            const workedTime = (new Date() - startTime) - totalBreakTime;
             const hours = Math.floor(workedTime / 3600000);
             const minutes = Math.floor((workedTime % 3600000) / 60000);
             const seconds = Math.floor((workedTime % 60000) / 1000);
