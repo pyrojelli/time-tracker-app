@@ -12,13 +12,12 @@
         .timer-display { font-variant-numeric: tabular-nums; }
     </style>
     
-    <!-- Main application script is in the head to ensure functions are defined before they are called by Google's async scripts -->
+    <!-- Main application script -->
     <script>
         // --- CONFIGURATION ---
-        // IMPORTANT: Replace with your actual credentials.
         const CLIENT_ID = '638799604524-qi2brhvvnve4k90mfg7ja3b7k0hds6u6.apps.googleusercontent.com';
-        const API_KEY = 'AIzaSyC9NDjM6pEKgMsGeyB97UzJqqvJBd47ISI'; // This is optional but highly recommended.
-        const CALENDAR_ID = 'ea8a510acb4eeaa186e9f9f39a2c5e9b342d8dd6773232b5ef7f3a020f61280b@group.calendar.google.com'; // Example: 'primary' or a specific calendar ID.
+        const API_KEY = 'AIzaSyC9NDjM6pEKgMsGeyB97UzJqqvJBd47ISI'; // Optional but recommended
+        const CALENDAR_ID = 'ea8a510acb4eeaa186e9f9f39a2c5e9b342d8dd6773232b5ef7f3a020f61280b@group.calendar.google.com';
         
         // --- GOOGLE API SETUP ---
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
@@ -27,38 +26,50 @@
         let tokenClient;
         let gapiInited = false;
         let gisInited = false;
+        let postAuthAction = null; // Stores a function to run after auth is successful
 
         // --- INITIALIZATION ---
-        // Called when the Google API script is loaded.
         function gapiLoaded() {
             gapi.load('client', initializeGapiClient);
         }
 
-        // Called when the Google Sign-In script is loaded.
         function gisLoaded() {
             try {
                 tokenClient = google.accounts.oauth2.initTokenClient({
                     client_id: CLIENT_ID,
                     scope: SCOPES,
-                    callback: (tokenResponse) => {
-                        // This callback is executed after the user grants or denies consent.
+                    callback: async (tokenResponse) => {
                         if (tokenResponse.error) {
-                            throw (tokenResponse);
+                            console.error("Auth Error:", tokenResponse);
+                            if (postAuthAction) {
+                                showMessage("Authorization failed. Your event was not saved.");
+                                document.getElementById('clock-out-btn').disabled = false;
+                                document.getElementById('clock-out-btn').textContent = 'Clock Out';
+                            }
+                            postAuthAction = null; 
+                            return;
                         }
-                        // On successful auth, update the UI.
-                        updateUI(true);
+
+                        if (typeof postAuthAction === 'function') {
+                            try {
+                                await postAuthAction();
+                            } catch (e) {
+                                console.error("Error executing post-auth action:", e);
+                                const errorMessage = e.result?.error?.message || e.message || 'An unknown error occurred.';
+                                showMessage(`Failed to complete action. Error: ${errorMessage}`);
+                            } finally {
+                                postAuthAction = null;
+                            }
+                        }
                     },
                 });
                 gisInited = true;
-                maybeEnableButtons();
             } catch (e) {
                 console.error("Error initializing Google Sign-In:", e);
-                document.getElementById('auth-message').textContent = "Error: Could not initialize Google Sign-In.";
-                document.getElementById('authorize_button').textContent = "Initialization Failed";
+                showMessage("Error: Could not initialize Google Sign-In.");
             }
         }
 
-        // Initializes the GAPI client.
         async function initializeGapiClient() {
             try {
                 await gapi.client.init({
@@ -66,19 +77,9 @@
                     discoveryDocs: [DISCOVERY_DOC],
                 });
                 gapiInited = true;
-                maybeEnableButtons();
             } catch (e) {
                 console.error("Error initializing Google API Client:", e);
-                document.getElementById('auth-message').textContent = "Error: Could not initialize Google API client.";
-                document.getElementById('authorize_button').textContent = "Initialization Failed";
-            }
-        }
-
-        // Enables the authorization button once both Google libraries are ready.
-        function maybeEnableButtons() {
-            if (gapiInited && gisInited) {
-                document.getElementById('authorize_button').disabled = false;
-                document.getElementById('authorize_button').textContent = 'Authorize Google Calendar';
+                showMessage("Error: Could not initialize Google API client.");
             }
         }
     </script>
@@ -96,16 +97,7 @@
             <p class="text-slate-500 dark:text-slate-400 mt-1">For Data Annotation Projects</p>
         </div>
 
-        <!-- Auth Screen: Shown when the user is not signed in -->
-        <div id="auth-screen" class="text-center">
-            <p id="auth-message" class="mb-4">Please authorize access to your Google Calendar to begin.</p>
-            <button id="authorize_button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105" disabled>
-                Initializing...
-            </button>
-        </div>
-
-        <!-- Main App Screen: Shown after successful authorization -->
-        <div id="app-screen" class="hidden">
+        <div id="app-screen">
             <div class="mb-6">
                 <label for="project-name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Project Name</label>
                 <input type="text" id="project-name" class="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="e.g., Image Classification">
@@ -116,7 +108,7 @@
                 <p id="status-message" class="text-slate-500 dark:text-slate-400 mt-2">Ready to clock in.</p>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 gap-4 mb-4">
                 <button id="clock-in-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition">
                     Clock In
                 </button>
@@ -124,7 +116,10 @@
                     Clock Out
                 </button>
             </div>
-             <button id="signout_button" class="w-full mt-4 text-center text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition">Sign Out</button>
+            <div class="mb-4">
+                 <button id="break-btn" disabled class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-4 rounded-lg transition disabled:bg-slate-400 dark:disabled:bg-slate-600">Start Break</button>
+            </div>
+             <!-- Sign in button removed for a cleaner workflow -->
         </div>
         
         <!-- Message Box Modal -->
@@ -134,25 +129,45 @@
                 <button id="message-ok-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg">OK</button>
             </div>
         </div>
+        
+        <!-- Edit Time Modal -->
+        <div id="edit-time-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-8 max-w-sm w-full">
+                <h3 class="text-lg font-bold text-center mb-2 text-slate-900 dark:text-white">Edit & Save Event</h3>
+                <p id="edit-project-name" class="text-center text-slate-500 dark:text-slate-400 mb-6"></p>
+                <div class="flex items-center justify-center gap-4 mb-6">
+                    <div>
+                        <label for="edit-hours" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Hours</label>
+                        <input type="number" id="edit-hours" min="0" class="w-24 text-center mt-1 px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="edit-minutes" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Minutes</label>
+                        <input type="number" id="edit-minutes" min="0" max="59" class="w-24 text-center mt-1 px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div class="flex justify-between gap-4">
+                    <button id="cancel-edit-btn" class="w-full bg-slate-300 hover:bg-slate-400 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                    <button id="save-event-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Save Event</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
         // --- DOM ELEMENT & STATE MANAGEMENT ---
-        // Declare variables globally
-        let authScreen, appScreen, authorizeButton, signoutButton, clockInBtn, clockOutBtn, projectNameInput, timerDisplay, statusMessage, messageBox, messageText, messageOkBtn;
+        let clockInBtn, clockOutBtn, projectNameInput, timerDisplay, statusMessage, messageBox, messageText, messageOkBtn, breakBtn;
+        let editTimeModal, editProjectName, editHoursInput, editMinutesInput, saveEventBtn, cancelEditBtn;
         
-        // App State
         let timerInterval = null;
         let startTime = null;
         let isClockedIn = false;
+        let isOnBreak = false;
+        let breakStartTime = null;
+        let totalBreakTime = 0;
+        let pendingSaveData = null; // Holds data between clock-out and save
 
-        // Wait until the DOM is fully loaded before trying to access elements.
         document.addEventListener('DOMContentLoaded', () => {
             // Assign DOM elements
-            authScreen = document.getElementById('auth-screen');
-            appScreen = document.getElementById('app-screen');
-            authorizeButton = document.getElementById('authorize_button');
-            signoutButton = document.getElementById('signout_button');
             clockInBtn = document.getElementById('clock-in-btn');
             clockOutBtn = document.getElementById('clock-out-btn');
             projectNameInput = document.getElementById('project-name');
@@ -161,119 +176,137 @@
             messageBox = document.getElementById('message-box');
             messageText = document.getElementById('message-text');
             messageOkBtn = document.getElementById('message-ok-btn');
+            breakBtn = document.getElementById('break-btn');
+            
+            // Edit Modal elements
+            editTimeModal = document.getElementById('edit-time-modal');
+            editProjectName = document.getElementById('edit-project-name');
+            editHoursInput = document.getElementById('edit-hours');
+            editMinutesInput = document.getElementById('edit-minutes');
+            saveEventBtn = document.getElementById('save-event-btn');
+            cancelEditBtn = document.getElementById('cancel-edit-btn');
 
             // Attach Event Listeners
-            authorizeButton.onclick = () => {
-                // Request an access token, prompting the user for consent if needed.
-                tokenClient.requestAccessToken({ prompt: 'consent' });
-            };
-
-            signoutButton.onclick = () => {
-                const token = gapi.client.getToken();
-                if (token !== null) {
-                    // Revoke the token to sign the user out.
-                    google.accounts.oauth2.revoke(token.access_token, () => {
-                        gapi.client.setToken('');
-                        updateUI(false);
-                    });
-                }
-            };
-
-            clockInBtn.addEventListener('click', () => {
-                const projectName = projectNameInput.value.trim();
-                if (!projectName) {
-                    showMessage("Please enter a project name before clocking in.");
-                    return;
-                }
-                startTimer(projectName);
+            clockInBtn.addEventListener('click', startTimer);
+            clockOutBtn.addEventListener('click', stopTimerAndShowEditModal);
+            breakBtn.addEventListener('click', handleBreak);
+            messageOkBtn.addEventListener('click', () => messageBox.classList.add('hidden'));
+            cancelEditBtn.addEventListener('click', () => {
+                editTimeModal.classList.add('hidden');
+                resetState(); // User cancelled, so reset everything.
             });
-
-            clockOutBtn.addEventListener('click', stopTimerAndCreateEvent);
-            
-            messageOkBtn.addEventListener('click', () => {
-                messageBox.classList.add('hidden');
-            });
+            saveEventBtn.addEventListener('click', saveEditedEvent);
         });
 
-        // --- AUTHENTICATION & UI LOGIC ---
-        function updateUI(isAuthorized) {
-            if (isAuthorized) {
-                authScreen.classList.add('hidden');
-                appScreen.classList.remove('hidden');
-            } else {
-                appScreen.classList.add('hidden');
-                authScreen.classList.remove('hidden');
-                // If user signs out while clocked in, reset the state.
-                if (isClockedIn) {
-                    clearInterval(timerInterval);
-                    resetState();
-                }
+        // --- STOPWATCH & BREAK LOGIC ---
+        function startTimer() {
+            const projectName = projectNameInput.value.trim();
+            if (!projectName) {
+                showMessage("Please enter a project name before clocking in.");
+                return;
             }
-        }
-        
-        // --- STOPWATCH LOGIC ---
-        function startTimer(projectName) {
             startTime = new Date();
             isClockedIn = true;
             clockInBtn.disabled = true;
             clockOutBtn.disabled = false;
+            breakBtn.disabled = false;
             projectNameInput.disabled = true;
             statusMessage.textContent = `Clocked in for: ${projectName}`;
             statusMessage.classList.add('text-green-500');
             timerInterval = setInterval(updateTimerDisplay, 1000);
-            updateTimerDisplay(); // Run once immediately
+            updateTimerDisplay();
         }
 
-        // --- ** REVISED FUNCTION WITH TOKEN REFRESH ** ---
-        async function stopTimerAndCreateEvent() {
+        function handleBreak() {
+            if (!isClockedIn) return;
+            isOnBreak = !isOnBreak;
+            if (isOnBreak) {
+                breakStartTime = new Date();
+                clearInterval(timerInterval);
+                breakBtn.textContent = 'End Break';
+                breakBtn.classList.replace('bg-yellow-500', 'bg-blue-500');
+                breakBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-blue-600');
+                statusMessage.textContent = "On Break";
+            } else {
+                totalBreakTime += new Date() - breakStartTime;
+                timerInterval = setInterval(updateTimerDisplay, 1000);
+                breakBtn.textContent = 'Start Break';
+                breakBtn.classList.replace('bg-blue-500', 'bg-yellow-500');
+                breakBtn.classList.replace('hover:bg-blue-600', 'hover:bg-yellow-600');
+                statusMessage.textContent = `Clocked in for: ${projectNameInput.value.trim()}`;
+            }
+        }
+
+        function stopTimerAndShowEditModal() {
             if (!isClockedIn) return;
             
-            const endTime = new Date();
             clearInterval(timerInterval);
+            const endTime = new Date();
+            if (isOnBreak) totalBreakTime += new Date() - breakStartTime;
 
-            const projectName = projectNameInput.value.trim();
-            const durationMs = endTime - startTime;
+            const workedDurationMs = (endTime - startTime) - totalBreakTime;
             
+            pendingSaveData = {
+                startTime: startTime,
+                endTime: endTime,
+                projectName: projectNameInput.value.trim()
+            };
+
+            const totalMinutes = Math.floor(workedDurationMs / 60000);
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            
+            editProjectName.textContent = `For project: "${pendingSaveData.projectName}"`;
+            editHoursInput.value = hours;
+            editMinutesInput.value = minutes;
+
+            editTimeModal.classList.remove('hidden');
+        }
+
+        function saveEditedEvent() {
+            editTimeModal.classList.add('hidden');
             clockOutBtn.disabled = true;
-            clockOutBtn.textContent = 'Saving...';
+            clockOutBtn.textContent = 'Authorizing...';
 
-            try {
-                // **THE FIX:** Silently request a token. If the existing one is expired,
-                // this will fetch a new one without user interaction.
-                await new Promise((resolve, reject) => {
-                    tokenClient.requestAccessToken({ prompt: '' });
-                    // There isn't a direct promise/await for this, but the gapi client will
-                    // now have the correct token for the next API call. We'll resolve
-                    // after a brief moment to ensure token is set. This is a pragmatic approach.
-                    setTimeout(resolve, 500);
-                });
+            const editedHours = parseInt(editHoursInput.value, 10) || 0;
+            const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
+            const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
 
-                await createCalendarEvent(startTime, endTime, projectName, durationMs);
-                showMessage(`Event created for "${projectName}"!`);
-            } catch (error) {
-                console.error('Full error object:', error);
-                const errorMessage = error.result?.error?.message || error.message || 'An unknown error occurred.';
-                
-                // Provide a more specific error for authentication issues.
-                if (error.result?.error?.status === 'UNAUTHENTICATED') {
-                    showMessage(`Authentication failed. Your session might have expired. Please try signing out and in again.`);
-                } else {
+            postAuthAction = async () => {
+                clockOutBtn.textContent = 'Saving...';
+                try {
+                    await createCalendarEvent(pendingSaveData.startTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs);
+                    showMessage(`Event created for "${pendingSaveData.projectName}"!`);
+                } catch (error) {
+                    console.error('Full error object:', error);
+                    const errorMessage = error.result?.error?.message || error.message || 'An unknown error occurred.';
                     showMessage(`Failed to create calendar event. Error: ${errorMessage}`);
+                } finally {
+                    clockOutBtn.textContent = 'Clock Out';
+                    resetState();
                 }
-            } finally {
-                // This block always runs, ensuring the UI is reset.
-                clockOutBtn.textContent = 'Clock Out';
-                resetState();
-            }
+            };
+            
+            tokenClient.requestAccessToken({ prompt: 'consent' });
         }
 
         function resetState() {
             isClockedIn = false;
             startTime = null;
             timerInterval = null;
+            isOnBreak = false;
+            breakStartTime = null;
+            totalBreakTime = 0;
+            pendingSaveData = null;
+
             clockInBtn.disabled = false;
             clockOutBtn.disabled = true;
             projectNameInput.disabled = false;
+            breakBtn.disabled = true;
+            breakBtn.textContent = 'Start Break';
+            breakBtn.classList.replace('bg-blue-500', 'bg-yellow-500');
+            breakBtn.classList.replace('hover:bg-blue-600', 'hover:bg-yellow-600');
+            
             projectNameInput.value = '';
             timerDisplay.textContent = '00:00:00';
             statusMessage.textContent = 'Ready to clock in.';
@@ -282,21 +315,20 @@
 
         function updateTimerDisplay() {
             if (!startTime) return;
-            const now = new Date();
-            const diff = now - startTime;
-            const hours = Math.floor(diff / 3600000);
-            const minutes = Math.floor((diff % 3600000) / 60000);
-            const seconds = Math.floor((diff % 60000) / 1000);
+            const workedTime = (new Date() - startTime) - totalBreakTime;
+            const hours = Math.floor(workedTime / 3600000);
+            const minutes = Math.floor((workedTime % 3600000) / 60000);
+            const seconds = Math.floor((workedTime % 60000) / 1000);
             timerDisplay.textContent = 
                 `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
         }
 
         // --- GOOGLE CALENDAR LOGIC ---
-        async function createCalendarEvent(start, end, project, durationMs) {
-            const totalMinutes = Math.floor(durationMs / 60000);
+        async function createCalendarEvent(start, end, project, workedMs) {
+            const totalMinutes = Math.floor(workedMs / 60000);
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
-            const eventTitle = `${project} - ${hours}h ${minutes}m`;
+            const eventTitle = `${project} - ${hours}h ${minutes}m (worked)`;
 
             const event = {
                 'summary': eventTitle,
@@ -305,12 +337,10 @@
                 'end': { 'dateTime': end.toISOString(), 'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone },
             };
             
-            const request = gapi.client.calendar.events.insert({
+            await gapi.client.calendar.events.insert({
                 'calendarId': CALENDAR_ID,
                 'resource': event,
             });
-            
-            await request;
         }
 
         // --- UTILITY ---
@@ -321,3 +351,4 @@
     </script>
 </body>
 </html>
+
