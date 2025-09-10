@@ -199,7 +199,14 @@
             clockOutBtn.addEventListener('click', stopTimerAndShowEditModal);
             breakBtn.addEventListener('click', handleBreak);
             messageOkBtn.addEventListener('click', () => { messageBox.classList.add('hidden'); playSound('click'); });
-            cancelEditBtn.addEventListener('click', () => { editTimeModal.classList.add('hidden'); resetState(); playSound('click'); });
+            cancelEditBtn.addEventListener('click', () => {
+                playSound('click');
+                editTimeModal.classList.add('hidden');
+                // **THE FIX**: Instead of resetting, just resume the timer.
+                if (isClockedIn) {
+                    timerInterval = setInterval(updateTimerDisplay, 1000);
+                }
+            });
             saveEventBtn.addEventListener('click', () => { saveEditedEvent(); playSound('confirm'); });
             emojiPickerBtn.addEventListener('click', () => { emojiModal.classList.remove('hidden'); playSound('click'); });
             emojiModal.addEventListener('click', (e) => { if (e.target === emojiModal) emojiModal.classList.add('hidden'); });
@@ -482,5 +489,6 @@
     </script>
 </body>
 </html>
+
 
 
