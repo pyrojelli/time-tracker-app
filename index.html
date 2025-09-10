@@ -31,8 +31,6 @@
 
         // These variables will be populated by the on-demand loader.
         let tokenClient;
-        let gapiInited = false;
-        let gisInited = false;
         let postAuthAction = null;
         let googleApiPromise = null; // This promise ensures we only load the scripts once.
 
@@ -40,39 +38,42 @@
         let synth, audioReady = false, alarmInterval = null;
 
         /**
-         * ON-DEMAND GOOGLE API LOADER
-         * This function is the new core of the Google integration. It does nothing until called.
-         * When called, it injects the Google API scripts into the page and returns a promise
-         * that resolves when both scripts are loaded and their clients are initialized.
+         * ON-DEMAND GOOGLE API LOADER (REWRITTEN FOR ROBUSTNESS)
+         * This function uses a modern Promise.all and Promise.race pattern to reliably load
+         * and initialize the Google API scripts when called.
          */
         function loadAndInitGoogleApis() {
-            // If we've already started or finished loading, return the existing promise.
+            // If the loading process has already started or completed, return the existing promise.
             if (googleApiPromise) {
                 return googleApiPromise;
             }
 
-            // Create a new promise to manage the entire loading and initialization flow.
-            googleApiPromise = new Promise((resolve, reject) => {
-                const timeoutId = setTimeout(() => {
-                    reject(new Error("Connection to Google's servers timed out. This can be caused by a network issue or an ad-blocker."));
-                }, 15000);
-
-                // Define the initialization functions that the Google scripts will call upon loading.
-                // We attach them to 'window' so the 'onload' parameter in the script URL can find them.
+            // Create a promise for loading the Google API Client (GAPI)
+            const gapiPromise = new Promise((resolve, reject) => {
+                // Define the callback function that the script's 'onload' parameter will call
                 window.onGapiClientLoad = () => {
                     gapi.load('client', async () => {
                         try {
                             await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
                             await gapi.client.load('calendar', 'v3');
-                            gapiInited = true;
                             console.log("GAPI client initialized successfully on-demand.");
-                            if (gisInited) { clearTimeout(timeoutId); resolve(); } // Check if both are done
-                        } catch (e) {
-                            reject(e);
+                            resolve();
+                        } catch (err) {
+                            reject(err);
                         }
                     });
                 };
+                // Create and inject the script tag
+                const script = document.createElement('script');
+                script.src = 'https://apis.google.com/js/api.js?onload=onGapiClientLoad';
+                script.async = true;
+                script.defer = true;
+                script.onerror = () => reject(new Error('Failed to load Google API script. Check for ad-blockers or network issues.'));
+                document.head.appendChild(script);
+            });
 
+            // Create a promise for loading the Google Identity Services (GIS) client
+            const gisPromise = new Promise((resolve, reject) => {
                 window.onGisClientLoad = () => {
                     try {
                         tokenClient = google.accounts.oauth2.initTokenClient({
@@ -94,29 +95,33 @@
                                 }
                             },
                         });
-                        gisInited = true;
                         console.log("GIS client initialized successfully on-demand.");
-                        if (gapiInited) { clearTimeout(timeoutId); resolve(); } // Check if both are done
-                    } catch (e) {
-                        reject(e);
+                        resolve();
+                    } catch (err) {
+                        reject(err);
                     }
                 };
-
-                // Create script elements and inject them into the page to begin loading.
-                const gapiScript = document.createElement('script');
-                gapiScript.src = 'https://apis.google.com/js/api.js?onload=onGapiClientLoad';
-                gapiScript.async = true;
-                gapiScript.defer = true;
-                gapiScript.onerror = () => reject(new Error('Failed to load Google API script. Check for ad-blockers or network issues.'));
-                document.head.appendChild(gapiScript);
-
-                const gisScript = document.createElement('script');
-                gisScript.src = 'https://accounts.google.com/gsi/client?onload=onGisClientLoad';
-                gisScript.async = true;
-                gisScript.defer = true;
-                gisScript.onerror = () => reject(new Error('Failed to load Google Sign-In script. Check for ad-blockers or network issues.'));
-                document.head.appendChild(gisScript);
+                const script = document.createElement('script');
+                script.src = 'https://accounts.google.com/gsi/client?onload=onGisClientLoad';
+                script.async = true;
+                script.defer = true;
+                script.onerror = () => reject(new Error('Failed to load Google Sign-In script. Check for ad-blockers or network issues.'));
+                document.head.appendChild(script);
             });
+
+            // Create a timeout promise that will race against the script loaders
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => {
+                    reject(new Error("Connection to Google's servers timed out. This can be caused by a network issue or an ad-blocker."));
+                }, 15000);
+            });
+
+            // Use Promise.race to either resolve when both scripts are loaded OR reject on timeout.
+            // Promise.all ensures we wait for both gapiPromise and gisPromise to complete.
+            googleApiPromise = Promise.race([
+                Promise.all([gapiPromise, gisPromise]),
+                timeoutPromise
+            ]);
 
             return googleApiPromise;
         }
