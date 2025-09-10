@@ -202,8 +202,12 @@
             cancelEditBtn.addEventListener('click', () => {
                 playSound('click');
                 editTimeModal.classList.add('hidden');
-                // **THE FIX**: Instead of resetting, just resume the timer.
+                // If we were clocked in, account for the time the modal was open and resume the timer
                 if (isClockedIn) {
+                    if (pendingSaveData && pendingSaveData.endTime) {
+                        const pauseDuration = new Date() - pendingSaveData.endTime;
+                        totalBreakTime += pauseDuration;
+                    }
                     timerInterval = setInterval(updateTimerDisplay, 1000);
                 }
             });
@@ -339,7 +343,6 @@
         function resumeWork() {
             stopSound('alarm');
 
-            // **THE FIX**: Calculate the total elapsed break time only when resuming.
             if (breakStartTime) {
                 totalBreakTime += new Date() - breakStartTime;
                 breakStartTime = null;
@@ -370,14 +373,15 @@
         function stopTimerAndShowEditModal() {
             if (!isClockedIn) return;
             playSound('confirm');
-            // If on break, finalize break time before stopping
+            
             if (breakState === 'active' || breakState === 'finished') {
                 stopSound('alarm');
                 if (breakStartTime) {
                     totalBreakTime += new Date() - breakStartTime;
                 }
             }
-            clearInterval(timerInterval);
+            
+            clearInterval(timerInterval); // This is the main pause
             clearInterval(breakInterval);
             
             const endTime = new Date();
@@ -489,6 +493,4 @@
     </script>
 </body>
 </html>
-
-
 
