@@ -379,15 +379,14 @@
         }
         
         async function saveEditedEvent() {
-            // **THE REAL FIX**: This function now waits for the APIs to be ready if they aren't.
             if (!gapiInited || !gisInited) {
-                showMessage("Google services are still initializing. Please wait a moment and try again.");
-                // We don't want to get stuck, so we reset the button and modal.
-                clockOutBtn.disabled = false;
-                clockOutBtn.textContent = 'Clock Out';
-                return;
+                await new Promise(resolve => setTimeout(resolve, 500));
+                 if (!gapiInited || !gisInited) {
+                     showMessage("Google services are taking a moment to load. Please try again in a second.");
+                     return;
+                 }
             }
-
+            
             editTimeModal.classList.add('hidden');
             clockOutBtn.disabled = true;
             clockOutBtn.textContent = 'Authorizing...';
