@@ -12,17 +12,11 @@
         .timer-display { font-variant-numeric: tabular-nums; }
     </style>
     
-    <!-- Audio library for sound effects -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     
-    <!-- 
-      Google API scripts are now loaded reliably on page start.
-      The 'onload' parameter tells the script which function to call once loaded.
-    -->
     <script async defer src="https://apis.google.com/js/api.js?onload=gapiLoaded"></script>
     <script async defer src="https://accounts.google.com/gsi/client?onload=gisLoaded"></script>
 
-    <!-- Main application script -->
     <script>
         // --- CONFIGURATION ---
         const CLIENT_ID = '638799604524-qi2brhvvnve4k90mfg7ja3b7k0hds6u6.apps.googleusercontent.com';
@@ -90,7 +84,6 @@
 </head>
 <body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 flex items-center justify-center min-h-screen p-4">
     <div class="w-full max-w-md mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 md:p-8 relative">
-        <!-- Utility Links -->
         <div class="absolute top-4 right-4 flex items-center gap-2">
             <a href="https://app.dataannotation.tech/workers/projects" target="_blank" rel="noopener noreferrer" title="DataAnnotation Dashboard" class="p-2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 transition hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-900 dark:hover:text-white transform hover:scale-110">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
@@ -398,7 +391,6 @@
                 return;
             }
 
-            // A critical check: Are the Google client libraries loaded and initialized?
             if (!gapiInited || !gisInited || !tokenClient) {
                 reportError("saveEditedEvent/pre-check", "Google services could not be initialized. This might be due to a network issue or a browser extension (like an ad-blocker) preventing connection to Google's servers. Please reload the page and try again.");
                 return;
@@ -426,8 +418,8 @@
                 }
             };
             
-            // This is the call that should trigger the Google Auth popup.
-            tokenClient.requestAccessToken();
+            // This forces the consent screen to appear for the user.
+            tokenClient.requestAccessToken({ prompt: 'consent' });
         }
 
         function resetState() {
@@ -481,17 +473,14 @@
             await gapi.client.calendar.events.insert({ 'calendarId': CALENDAR_ID, 'resource': event });
         }
         function showMessage(message) {
-            messageText.innerText = message; // Use innerText to preserve newlines
+            messageText.innerText = message;
             messageBox.classList.remove('hidden');
         }
 
         function reportError(sourceFunction, errorObject) {
-            console.error(`[${sourceFunction}]`, errorObject); // Keep detailed console log
+            console.error(`[${sourceFunction}]`, errorObject);
 
-            // Generate a simple, unique ID for this error instance
             const errorId = `E${Date.now().toString().slice(-6)}`;
-
-            // Try to extract a meaningful message from the error
             let detailedMessage = 'No details available.';
             if (errorObject) {
                 if (typeof errorObject === 'string') {
@@ -504,7 +493,6 @@
                     detailedMessage = JSON.stringify(errorObject.error);
                 } else {
                     try {
-                        // A more robust way to stringify, including non-enumerable properties
                         detailedMessage = JSON.stringify(errorObject, Object.getOwnPropertyNames(errorObject));
                     } catch {
                         detailedMessage = 'Could not stringify the error object.';
@@ -512,12 +500,9 @@
                 }
             }
 
-            // Format the message for the user
             const userMessage = `An unexpected error occurred.\n\nPlease report the following code:\nID: ${errorId}\nSource: ${sourceFunction}\nDetails: ${detailedMessage}`;
-
             showMessage(userMessage);
         }
     </script>
 </body>
 </html>
-
