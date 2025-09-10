@@ -14,20 +14,14 @@
     
     <!-- Audio library for sound effects -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
-
-    <!-- 
-        These scripts load the necessary Google libraries.
-        The 'onload' parameter in the URL tells the script which function to call
-        once it has finished loading.
-    -->
-    <script async defer src="https://apis.google.com/js/api.js?onload=gapiLoaded"></script>
-    <script async defer src="https://accounts.google.com/gsi/client?onload=gisLoaded"></script>
+    
+    <!-- No Google API scripts are loaded here initially. -->
+    <!-- They will be loaded on-demand when the user clicks "Save Event". -->
 
     <!-- Main application script -->
     <script>
         // --- CONFIGURATION ---
         const CLIENT_ID = '638799604524-qi2brhvvnve4k90mfg7ja3b7k0hds6u6.apps.googleusercontent.com';
-        // IMPORTANT: Storing API Keys directly in client-side code is not recommended for production.
         const API_KEY = 'AIzaSyC9NDjM6pEKgMsGeyB97UzJqqvJBd47ISI';
         const CALENDAR_ID = 'ea8a510acb4eeaa186e9f9f39a2c5e9b342d8dd6773232b5ef7f3a020f61280b@group.calendar.google.com';
         
@@ -35,66 +29,96 @@
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 
+        // These variables will be populated by the on-demand loader.
         let tokenClient;
         let gapiInited = false;
         let gisInited = false;
         let postAuthAction = null;
+        let googleApiPromise = null; // This promise ensures we only load the scripts once.
 
         // --- AUDIO SETUP ---
         let synth, audioReady = false, alarmInterval = null;
 
-        // --- INITIALIZATION ---
-        function gapiLoaded() { 
-            console.log("GAPI script loaded.");
-            gapi.load('client', initializeGapiClient); 
-        }
-        
-        function gisLoaded() {
-            console.log("GIS script loaded.");
-            try {
-                tokenClient = google.accounts.oauth2.initTokenClient({
-                    client_id: CLIENT_ID, scope: SCOPES,
-                    callback: async (tokenResponse) => {
-                        if (tokenResponse.error) {
-                            if (postAuthAction) {
-                                reportError('gisLoaded/callback', tokenResponse);
-                                document.getElementById('clock-out-btn').disabled = false;
-                                document.getElementById('clock-out-btn').textContent = 'Clock Out';
-                            }
-                            postAuthAction = null; return;
-                        }
-
-                        // This is a critical step. After getting a token, we must explicitly
-                        // tell the GAPI client library to use it for all subsequent requests.
-                        gapi.client.setToken({ access_token: tokenResponse.access_token });
-
-                        if (typeof postAuthAction === 'function') {
-                            try { await postAuthAction(); } 
-                            catch (e) {
-                                reportError('postAuthAction', e);
-                            } finally { postAuthAction = null; }
-                        }
-                    },
-                });
-                gisInited = true;
-                console.log("GIS client initialized successfully.");
-                updateApiStatus();
-            } catch (e) {
-                reportError('gisLoaded/init', e);
-                updateApiStatus(true);
+        /**
+         * ON-DEMAND GOOGLE API LOADER
+         * This function is the new core of the Google integration. It does nothing until called.
+         * When called, it injects the Google API scripts into the page and returns a promise
+         * that resolves when both scripts are loaded and their clients are initialized.
+         */
+        function loadAndInitGoogleApis() {
+            // If we've already started or finished loading, return the existing promise.
+            if (googleApiPromise) {
+                return googleApiPromise;
             }
-        }
-        async function initializeGapiClient() {
-            try {
-                await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
-                await gapi.client.load('calendar', 'v3');
-                gapiInited = true;
-                console.log("GAPI client initialized successfully.");
-                updateApiStatus();
-            } catch (e) {
-                reportError('initializeGapiClient', e);
-                updateApiStatus(true);
-            }
+
+            // Create a new promise to manage the entire loading and initialization flow.
+            googleApiPromise = new Promise((resolve, reject) => {
+                const timeoutId = setTimeout(() => {
+                    reject(new Error("Connection to Google's servers timed out. This can be caused by a network issue or an ad-blocker."));
+                }, 15000);
+
+                // Define the initialization functions that the Google scripts will call upon loading.
+                // We attach them to 'window' so the 'onload' parameter in the script URL can find them.
+                window.onGapiClientLoad = () => {
+                    gapi.load('client', async () => {
+                        try {
+                            await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
+                            await gapi.client.load('calendar', 'v3');
+                            gapiInited = true;
+                            console.log("GAPI client initialized successfully on-demand.");
+                            if (gisInited) { clearTimeout(timeoutId); resolve(); } // Check if both are done
+                        } catch (e) {
+                            reject(e);
+                        }
+                    });
+                };
+
+                window.onGisClientLoad = () => {
+                    try {
+                        tokenClient = google.accounts.oauth2.initTokenClient({
+                            client_id: CLIENT_ID, scope: SCOPES,
+                            callback: async (tokenResponse) => {
+                                if (tokenResponse.error) {
+                                    if (postAuthAction) {
+                                        reportError('gisLoaded/callback', tokenResponse);
+                                        document.getElementById('clock-out-btn').disabled = false;
+                                        document.getElementById('clock-out-btn').textContent = 'Clock Out';
+                                    }
+                                    postAuthAction = null; return;
+                                }
+                                gapi.client.setToken({ access_token: tokenResponse.access_token });
+                                if (typeof postAuthAction === 'function') {
+                                    try { await postAuthAction(); } 
+                                    catch (e) { reportError('postAuthAction', e); } 
+                                    finally { postAuthAction = null; }
+                                }
+                            },
+                        });
+                        gisInited = true;
+                        console.log("GIS client initialized successfully on-demand.");
+                        if (gapiInited) { clearTimeout(timeoutId); resolve(); } // Check if both are done
+                    } catch (e) {
+                        reject(e);
+                    }
+                };
+
+                // Create script elements and inject them into the page to begin loading.
+                const gapiScript = document.createElement('script');
+                gapiScript.src = 'https://apis.google.com/js/api.js?onload=onGapiClientLoad';
+                gapiScript.async = true;
+                gapiScript.defer = true;
+                gapiScript.onerror = () => reject(new Error('Failed to load Google API script. Check for ad-blockers or network issues.'));
+                document.head.appendChild(gapiScript);
+
+                const gisScript = document.createElement('script');
+                gisScript.src = 'https://accounts.google.com/gsi/client?onload=onGisClientLoad';
+                gisScript.async = true;
+                gisScript.defer = true;
+                gisScript.onerror = () => reject(new Error('Failed to load Google Sign-In script. Check for ad-blockers or network issues.'));
+                document.head.appendChild(gisScript);
+            });
+
+            return googleApiPromise;
         }
     </script>
 </head>
@@ -176,15 +200,12 @@
                 <button id="cancel-break-selection-btn" class="w-full mt-4 bg-slate-300 hover:bg-slate-400 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
             </div>
         </div>
-        <!-- API Status Indicator -->
-        <p id="api-status" class="text-xs text-center text-slate-400 mt-4">Initializing Services...</p>
     </div>
     <script>
         let clockInBtn, clockOutBtn, projectNameInput, timerDisplay, statusMessage, messageBox, messageText, messageOkBtn, breakBtn, breakTimerDisplay;
         let editTimeModal, editProjectName, editHoursInput, editMinutesInput, saveEventBtn, cancelEditBtn;
         let emojiPickerBtn, emojiModal, emojiGrid;
         let breakModal, breakOptions, cancelBreakSelectionBtn;
-        let apiStatusIndicator;
         
         let timerInterval = null, startTime = null, isClockedIn = false, breakStartTime = null, totalBreakTime = 0, pendingSaveData = null, selectedEmoji = null;
         let breakInterval = null, breakTimeLeft = 0;
@@ -214,7 +235,6 @@
             breakModal = document.getElementById('break-modal');
             breakOptions = document.getElementById('break-options');
             cancelBreakSelectionBtn = document.getElementById('cancel-break-selection-btn');
-            apiStatusIndicator = document.getElementById('api-status');
             
             // Add event listeners
             clockInBtn.addEventListener('click', startTimer);
@@ -248,34 +268,7 @@
 
             populateEmojis();
             populateBreakOptions();
-
-            // Failsafe timeout for API loading
-            setTimeout(() => {
-                if (!gapiInited || !gisInited) {
-                    // Check if an error has already been reported to avoid duplicate messages.
-                    if (apiStatusIndicator && apiStatusIndicator.textContent.indexOf('Error') === -1) {
-                         console.error("Google API loading timed out.");
-                         reportError("DOMContentLoaded/Timeout", "Connection to Google's servers timed out. This can be caused by a network issue or a browser extension (like an ad-blocker). Please check your connection, disable interfering extensions, and reload the page.");
-                         updateApiStatus(true);
-                    }
-                }
-            }, 15000); // 15-second timeout
         });
-        
-        function updateApiStatus(isError = false) {
-            if (!apiStatusIndicator) return;
-            // This function now ONLY updates the status text and does not interfere with buttons.
-            if (isError) {
-                apiStatusIndicator.textContent = 'Google Services: Error';
-                apiStatusIndicator.className = 'text-xs text-center text-red-500 mt-4';
-            } else if (gapiInited && gisInited) {
-                apiStatusIndicator.textContent = 'Google Services: Ready';
-                apiStatusIndicator.className = 'text-xs text-center text-green-500 mt-4';
-            } else {
-                apiStatusIndicator.textContent = 'Google Services: Initializing...';
-                apiStatusIndicator.className = 'text-xs text-center text-yellow-500 mt-4';
-            }
-        }
         
         async function initAudio() {
             if (audioReady) return;
@@ -432,15 +425,8 @@
             editTimeModal.classList.remove('hidden');
         }
         
-        function saveEditedEvent() {
+        async function saveEditedEvent() {
             console.log("Save event clicked.");
-            console.log(`API Status: gapiInited=${gapiInited}, gisInited=${gisInited}`);
-            console.log("Token client object:", tokenClient);
-
-            if (!gapiInited || !gisInited || typeof tokenClient === 'undefined') {
-                reportError("saveEditedEvent/pre-check", "Google services are not ready. Check API Status.");
-                return;
-            }
             if (!pendingSaveData) {
                 reportError("saveEditedEvent/pre-check", "No session data found to save.");
                 editTimeModal.classList.add('hidden');
@@ -450,36 +436,41 @@
 
             editTimeModal.classList.add('hidden');
             clockOutBtn.disabled = true;
-            clockOutBtn.textContent = 'Authorizing...';
+            clockOutBtn.textContent = 'Connecting...';
             playSound('confirm');
 
-            postAuthAction = async () => {
-                clockOutBtn.textContent = 'Saving...';
-                try {
-                    const editedHours = parseInt(editHoursInput.value, 10) || 0;
-                    const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
-                    const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
-                    const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
-
-                    await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
-                    showMessage(`Event created for "${pendingSaveData.projectName}"!`);
-                } catch (error) {
-                    reportError('saveEditedEvent/postAuthAction', error);
-                } finally {
-                    clockOutBtn.textContent = 'Clock Out';
-                    resetState();
-                }
-            };
-
             try {
-                // This is the recommended default auth prompt. It will only ask for consent
-                // if it's the first time or if the user has revoked access.
+                // This will load the Google scripts on-demand and initialize them.
+                // It only runs the network requests once.
+                await loadAndInitGoogleApis();
+
+                // Once the APIs are ready, we can proceed with the authorization request.
+                clockOutBtn.textContent = 'Authorizing...';
+
+                postAuthAction = async () => {
+                    clockOutBtn.textContent = 'Saving...';
+                    try {
+                        const editedHours = parseInt(editHoursInput.value, 10) || 0;
+                        const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
+                        const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
+                        const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
+
+                        await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
+                        showMessage(`Event created for "${pendingSaveData.projectName}"!`);
+                    } catch (error) {
+                        reportError('saveEditedEvent/postAuthAction', error);
+                    } finally {
+                        clockOutBtn.textContent = 'Clock Out';
+                        resetState();
+                    }
+                };
+
                 tokenClient.requestAccessToken();
-            } catch (e) {
-                reportError('saveEditedEvent/requestAccessToken', e);
+
+            } catch (error) {
+                reportError('saveEditedEvent/loadAndInit', error);
                 clockOutBtn.disabled = false;
                 clockOutBtn.textContent = 'Clock Out';
-                postAuthAction = null;
             }
         }
 
