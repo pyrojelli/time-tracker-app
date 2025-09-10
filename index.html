@@ -15,8 +15,12 @@
     <!-- Audio library for sound effects -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     
-    <!-- No Google API scripts are loaded here initially. -->
-    <!-- They will be loaded on-demand when the user clicks "Save Event". -->
+    <!-- 
+      Google API scripts are now loaded reliably on page start.
+      The 'onload' parameter tells the script which function to call once loaded.
+    -->
+    <script async defer src="https://apis.google.com/js/api.js?onload=gapiLoaded"></script>
+    <script async defer src="https://accounts.google.com/gsi/client?onload=gisLoaded"></script>
 
     <!-- Main application script -->
     <script>
@@ -29,101 +33,58 @@
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 
-        // These variables will be populated by the on-demand loader.
         let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
         let postAuthAction = null;
-        let googleApiPromise = null; // This promise ensures we only load the scripts once.
 
         // --- AUDIO SETUP ---
         let synth, audioReady = false, alarmInterval = null;
+        
+        // --- INITIALIZATION (CALLED BY SCRIPT TAGS ONLOAD) ---
+        function gapiLoaded() {
+            gapi.load('client', initializeGapiClient);
+        }
 
-        /**
-         * ON-DEMAND GOOGLE API LOADER (REWRITTEN FOR ROBUSTNESS)
-         * This function uses a modern Promise.all and Promise.race pattern to reliably load
-         * and initialize the Google API scripts when called.
-         */
-        function loadAndInitGoogleApis() {
-            // If the loading process has already started or completed, return the existing promise.
-            if (googleApiPromise) {
-                return googleApiPromise;
+        async function initializeGapiClient() {
+            try {
+                await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
+                await gapi.client.load('calendar', 'v3');
+                gapiInited = true;
+                console.log("GAPI client initialized.");
+            } catch (e) {
+                console.error("Error initializing GAPI client:", e);
+                reportError('initializeGapiClient', e);
             }
+        }
 
-            // Create a promise for loading the Google API Client (GAPI)
-            const gapiPromise = new Promise((resolve, reject) => {
-                // Define the callback function that the script's 'onload' parameter will call
-                window.onGapiClientLoad = () => {
-                    gapi.load('client', async () => {
-                        try {
-                            await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
-                            await gapi.client.load('calendar', 'v3');
-                            console.log("GAPI client initialized successfully on-demand.");
-                            resolve();
-                        } catch (err) {
-                            reject(err);
+        function gisLoaded() {
+            try {
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID, scope: SCOPES,
+                    callback: async (tokenResponse) => {
+                        if (tokenResponse.error) {
+                            if (postAuthAction) {
+                                reportError('gisCallback', tokenResponse);
+                                document.getElementById('clock-out-btn').disabled = false;
+                                document.getElementById('clock-out-btn').textContent = 'Clock Out';
+                            }
+                            postAuthAction = null; return;
                         }
-                    });
-                };
-                // Create and inject the script tag
-                const script = document.createElement('script');
-                script.src = 'https://apis.google.com/js/api.js?onload=onGapiClientLoad';
-                script.async = true;
-                script.defer = true;
-                script.onerror = () => reject(new Error('Failed to load Google API script. Check for ad-blockers or network issues.'));
-                document.head.appendChild(script);
-            });
-
-            // Create a promise for loading the Google Identity Services (GIS) client
-            const gisPromise = new Promise((resolve, reject) => {
-                window.onGisClientLoad = () => {
-                    try {
-                        tokenClient = google.accounts.oauth2.initTokenClient({
-                            client_id: CLIENT_ID, scope: SCOPES,
-                            callback: async (tokenResponse) => {
-                                if (tokenResponse.error) {
-                                    if (postAuthAction) {
-                                        reportError('gisLoaded/callback', tokenResponse);
-                                        document.getElementById('clock-out-btn').disabled = false;
-                                        document.getElementById('clock-out-btn').textContent = 'Clock Out';
-                                    }
-                                    postAuthAction = null; return;
-                                }
-                                gapi.client.setToken({ access_token: tokenResponse.access_token });
-                                if (typeof postAuthAction === 'function') {
-                                    try { await postAuthAction(); } 
-                                    catch (e) { reportError('postAuthAction', e); } 
-                                    finally { postAuthAction = null; }
-                                }
-                            },
-                        });
-                        console.log("GIS client initialized successfully on-demand.");
-                        resolve();
-                    } catch (err) {
-                        reject(err);
-                    }
-                };
-                const script = document.createElement('script');
-                script.src = 'https://accounts.google.com/gsi/client?onload=onGisClientLoad';
-                script.async = true;
-                script.defer = true;
-                script.onerror = () => reject(new Error('Failed to load Google Sign-In script. Check for ad-blockers or network issues.'));
-                document.head.appendChild(script);
-            });
-
-            // Create a timeout promise that will race against the script loaders
-            const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => {
-                    reject(new Error("Connection to Google's servers timed out. This can be caused by a network issue or an ad-blocker."));
-                }, 15000);
-            });
-
-            // Use Promise.race to either resolve when both scripts are loaded OR reject on timeout.
-            // Promise.all ensures we wait for both gapiPromise and gisPromise to complete.
-            googleApiPromise = Promise.race([
-                Promise.all([gapiPromise, gisPromise]),
-                timeoutPromise
-            ]);
-
-            return googleApiPromise;
+                        gapi.client.setToken({ access_token: tokenResponse.access_token });
+                        if (typeof postAuthAction === 'function') {
+                            try { await postAuthAction(); } 
+                            catch (e) { reportError('postAuthAction', e); } 
+                            finally { postAuthAction = null; }
+                        }
+                    },
+                });
+                gisInited = true;
+                console.log("GIS client initialized.");
+            } catch (e) {
+                console.error("Error initializing GIS client:", e);
+                reportError('gisLoaded', e);
+            }
         }
     </script>
 </head>
@@ -430,53 +391,43 @@
             editTimeModal.classList.remove('hidden');
         }
         
-        async function saveEditedEvent() {
+        function saveEditedEvent() {
             console.log("Save event clicked.");
             if (!pendingSaveData) {
                 reportError("saveEditedEvent/pre-check", "No session data found to save.");
-                editTimeModal.classList.add('hidden');
-                resetState();
+                return;
+            }
+
+            // A critical check: Are the Google client libraries loaded and initialized?
+            if (!gapiInited || !gisInited || !tokenClient) {
+                reportError("saveEditedEvent/pre-check", "Google services could not be initialized. This might be due to a network issue or a browser extension (like an ad-blocker) preventing connection to Google's servers. Please reload the page and try again.");
                 return;
             }
 
             editTimeModal.classList.add('hidden');
             clockOutBtn.disabled = true;
-            clockOutBtn.textContent = 'Connecting...';
+            clockOutBtn.textContent = 'Authorizing...';
             playSound('confirm');
 
-            try {
-                // This will load the Google scripts on-demand and initialize them.
-                // It only runs the network requests once.
-                await loadAndInitGoogleApis();
-
-                // Once the APIs are ready, we can proceed with the authorization request.
-                clockOutBtn.textContent = 'Authorizing...';
-
-                postAuthAction = async () => {
-                    clockOutBtn.textContent = 'Saving...';
-                    try {
-                        const editedHours = parseInt(editHoursInput.value, 10) || 0;
-                        const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
-                        const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
-                        const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
-
-                        await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
-                        showMessage(`Event created for "${pendingSaveData.projectName}"!`);
-                    } catch (error) {
-                        reportError('saveEditedEvent/postAuthAction', error);
-                    } finally {
-                        clockOutBtn.textContent = 'Clock Out';
-                        resetState();
-                    }
-                };
-
-                tokenClient.requestAccessToken();
-
-            } catch (error) {
-                reportError('saveEditedEvent/loadAndInit', error);
-                clockOutBtn.disabled = false;
-                clockOutBtn.textContent = 'Clock Out';
-            }
+            postAuthAction = async () => {
+                clockOutBtn.textContent = 'Saving...';
+                try {
+                    const editedHours = parseInt(editHoursInput.value, 10) || 0;
+                    const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
+                    const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
+                    const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
+                    await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
+                    showMessage(`Event created for "${pendingSaveData.projectName}"!`);
+                } catch (error) {
+                    reportError('saveEditedEvent/postAuthAction', error);
+                } finally {
+                    clockOutBtn.textContent = 'Clock Out';
+                    resetState();
+                }
+            };
+            
+            // This is the call that should trigger the Google Auth popup.
+            tokenClient.requestAccessToken();
         }
 
         function resetState() {
