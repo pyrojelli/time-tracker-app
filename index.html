@@ -378,13 +378,10 @@
             editTimeModal.classList.remove('hidden');
         }
         
-        async function saveEditedEvent() {
-            if (!gapiInited || !gisInited) {
-                await new Promise(resolve => setTimeout(resolve, 500));
-                 if (!gapiInited || !gisInited) {
-                     showMessage("Google services are taking a moment to load. Please try again in a second.");
-                     return;
-                 }
+        function saveEditedEvent() {
+            if (!gapiInited || !gisInited || !tokenClient) {
+                showMessage("Google services are not ready. Please wait a moment and try again.");
+                return;
             }
             
             editTimeModal.classList.add('hidden');
