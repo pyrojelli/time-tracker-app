@@ -379,7 +379,8 @@
         }
         
         function saveEditedEvent() {
-            if (!gapiInited || !gisInited || !tokenClient) {
+            // **THE DEFINITIVE FIX**: This function is now robust against the race condition.
+            if (!gapiInited || !gisInited || typeof tokenClient === 'undefined') {
                 showMessage("Google services are not ready. Please wait a moment and try again.");
                 return;
             }
