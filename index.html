@@ -15,10 +15,23 @@
     <!-- Audio library for sound effects -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
 
+    <!-- 
+        *** FIX APPLIED HERE ***
+        These scripts load the necessary Google libraries.
+        The 'onload' parameter in the URL tells the script which function to call
+        once it has finished loading. Without these, your `gapiLoaded` and `gisLoaded`
+        functions were never being executed, so the authentication client was never initialized.
+    -->
+    <script async defer src="https://apis.google.com/js/api.js?onload=gapiLoaded"></script>
+    <script async defer src="https://accounts.google.com/gsi/client?onload=gisLoaded"></script>
+
     <!-- Main application script -->
     <script>
         // --- CONFIGURATION ---
         const CLIENT_ID = '638799604524-qi2brhvvnve4k90mfg7ja3b7k0hds6u6.apps.googleusercontent.com';
+        // IMPORTANT: Storing API Keys directly in client-side code is not recommended for production.
+        // This is okay for personal projects, but for a public application, this key should be
+        // managed through a backend server to prevent misuse.
         const API_KEY = 'AIzaSyC9NDjM6pEKgMsGeyB97UzJqqvJBd47ISI';
         const CALENDAR_ID = 'ea8a510acb4eeaa186e9f9f39a2c5e9b342d8dd6773232b5ef7f3a020f61280b@group.calendar.google.com';
         
@@ -35,9 +48,15 @@
         let synth, audioReady = false, alarmInterval = null;
 
         // --- INITIALIZATION ---
+        // This function is the callback for the Google API script.
         function gapiLoaded() { gapi.load('client', initializeGapiClient); }
+        
+        // This function is the callback for the Google Identity Services script.
         function gisLoaded() {
             try {
+                // This initializes the Google Auth client but does NOT trigger a login or
+                // request a token. It simply prepares the client to be used later when
+                // the user decides to save an event. This is done on page load for efficiency.
                 tokenClient = google.accounts.oauth2.initTokenClient({
                     client_id: CLIENT_ID, scope: SCOPES,
                     callback: async (tokenResponse) => {
@@ -379,7 +398,7 @@
         }
         
         function saveEditedEvent() {
-            // **THE DEFINITIVE FIX**: This function is now robust against the race condition.
+            // This check ensures the Google libraries have loaded before we try to use them.
             if (!gapiInited || !gisInited || typeof tokenClient === 'undefined') {
                 showMessage("Google services are not ready. Please wait a moment and try again.");
                 return;
@@ -406,6 +425,12 @@
                     resetState();
                 }
             };
+            // *** Authorization Step ***
+            // This is the key moment. We are now requesting an access token from Google.
+            // Because this happens right before we need to save the event, we are guaranteed
+            // to have a fresh, unexpired token, resolving the concern about long work sessions.
+            // This will trigger the Google Auth popup if the user is not signed in or
+            // needs to grant permissions.
             tokenClient.requestAccessToken({ prompt: 'consent' });
         }
 
