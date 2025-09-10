@@ -400,12 +400,6 @@
         }
 
         function saveEditedEvent() {
-            // **FIX**: More robust check for service readiness.
-            if (!gapiInited || !gisInited || typeof tokenClient === 'undefined') {
-                showMessage("Google services are still initializing. Please wait a moment and try again.");
-                return;
-            }
-
             editTimeModal.classList.add('hidden');
             clockOutBtn.disabled = true;
             clockOutBtn.textContent = 'Authorizing...';
