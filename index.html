@@ -100,7 +100,10 @@
         <div id="app-screen">
             <div class="mb-6">
                 <label for="project-name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Project Name</label>
-                <input type="text" id="project-name" class="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="e.g., Image Classification">
+                <div class="flex items-center gap-2">
+                    <button id="emoji-picker-btn" class="flex-shrink-0 h-12 w-12 bg-slate-200 dark:bg-slate-700 rounded-lg flex items-center justify-center text-2xl transition hover:bg-slate-300 dark:hover:bg-slate-600">🎨</button>
+                    <input type="text" id="project-name" class="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="e.g., Image Classification">
+                </div>
             </div>
 
             <div class="bg-slate-100 dark:bg-slate-900/50 rounded-lg p-6 text-center mb-6">
@@ -119,7 +122,6 @@
             <div class="mb-4">
                  <button id="break-btn" disabled class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-4 rounded-lg transition disabled:bg-slate-400 dark:disabled:bg-slate-600">Start Break</button>
             </div>
-             <!-- Sign in button removed for a cleaner workflow -->
         </div>
         
         <!-- Message Box Modal -->
@@ -151,12 +153,23 @@
                 </div>
             </div>
         </div>
+
+        <!-- Emoji Picker Modal -->
+        <div id="emoji-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 max-w-sm w-full">
+                <h3 class="text-lg font-bold text-center mb-4 text-slate-900 dark:text-white">Choose an Emoji</h3>
+                <div id="emoji-grid" class="grid grid-cols-4 gap-4 text-3xl">
+                    <!-- Emojis populated by JS -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
         // --- DOM ELEMENT & STATE MANAGEMENT ---
         let clockInBtn, clockOutBtn, projectNameInput, timerDisplay, statusMessage, messageBox, messageText, messageOkBtn, breakBtn;
         let editTimeModal, editProjectName, editHoursInput, editMinutesInput, saveEventBtn, cancelEditBtn;
+        let emojiPickerBtn, emojiModal, emojiGrid;
         
         let timerInterval = null;
         let startTime = null;
@@ -164,7 +177,8 @@
         let isOnBreak = false;
         let breakStartTime = null;
         let totalBreakTime = 0;
-        let pendingSaveData = null; // Holds data between clock-out and save
+        let pendingSaveData = null;
+        let selectedEmoji = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             // Assign DOM elements
@@ -178,13 +192,16 @@
             messageOkBtn = document.getElementById('message-ok-btn');
             breakBtn = document.getElementById('break-btn');
             
-            // Edit Modal elements
             editTimeModal = document.getElementById('edit-time-modal');
             editProjectName = document.getElementById('edit-project-name');
             editHoursInput = document.getElementById('edit-hours');
             editMinutesInput = document.getElementById('edit-minutes');
             saveEventBtn = document.getElementById('save-event-btn');
             cancelEditBtn = document.getElementById('cancel-edit-btn');
+            
+            emojiPickerBtn = document.getElementById('emoji-picker-btn');
+            emojiModal = document.getElementById('emoji-modal');
+            emojiGrid = document.getElementById('emoji-grid');
 
             // Attach Event Listeners
             clockInBtn.addEventListener('click', startTimer);
@@ -193,10 +210,37 @@
             messageOkBtn.addEventListener('click', () => messageBox.classList.add('hidden'));
             cancelEditBtn.addEventListener('click', () => {
                 editTimeModal.classList.add('hidden');
-                resetState(); // User cancelled, so reset everything.
+                resetState(); 
             });
             saveEventBtn.addEventListener('click', saveEditedEvent);
+            emojiPickerBtn.addEventListener('click', () => emojiModal.classList.remove('hidden'));
+            emojiModal.addEventListener('click', (e) => {
+                // Close modal if background is clicked
+                if (e.target === emojiModal) {
+                    emojiModal.classList.add('hidden');
+                }
+            });
+
+            populateEmojis();
         });
+        
+        // --- EMOJI PICKER LOGIC ---
+        function populateEmojis() {
+            const emojis = ["📊", "📈", "🖼️", "🏷️", "📝", "🤖", "🧠", "🔢", "🗂️", "📍", "🔊", "🎥", "💬", "🚗", "🧑‍💻", "🧪"];
+            emojis.forEach(emoji => {
+                const button = document.createElement('button');
+                button.textContent = emoji;
+                button.className = 'p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition';
+                button.onclick = () => selectEmoji(emoji);
+                emojiGrid.appendChild(button);
+            });
+        }
+
+        function selectEmoji(emoji) {
+            selectedEmoji = emoji;
+            emojiPickerBtn.textContent = emoji;
+            emojiModal.classList.add('hidden');
+        }
 
         // --- STOPWATCH & BREAK LOGIC ---
         function startTimer() {
@@ -211,7 +255,8 @@
             clockOutBtn.disabled = false;
             breakBtn.disabled = false;
             projectNameInput.disabled = true;
-            statusMessage.textContent = `Clocked in for: ${projectName}`;
+            emojiPickerBtn.disabled = true;
+            statusMessage.textContent = `Clocked in for: ${selectedEmoji ? selectedEmoji + ' ' : ''}${projectName}`;
             statusMessage.classList.add('text-green-500');
             timerInterval = setInterval(updateTimerDisplay, 1000);
             updateTimerDisplay();
@@ -233,7 +278,7 @@
                 breakBtn.textContent = 'Start Break';
                 breakBtn.classList.replace('bg-blue-500', 'bg-yellow-500');
                 breakBtn.classList.replace('hover:bg-blue-600', 'hover:bg-yellow-600');
-                statusMessage.textContent = `Clocked in for: ${projectNameInput.value.trim()}`;
+                statusMessage.textContent = `Clocked in for: ${selectedEmoji ? selectedEmoji + ' ' : ''}${projectNameInput.value.trim()}`;
             }
         }
 
@@ -249,14 +294,15 @@
             pendingSaveData = {
                 startTime: startTime,
                 endTime: endTime,
-                projectName: projectNameInput.value.trim()
+                projectName: projectNameInput.value.trim(),
+                selectedEmoji: selectedEmoji
             };
 
             const totalMinutes = Math.floor(workedDurationMs / 60000);
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
             
-            editProjectName.textContent = `For project: "${pendingSaveData.projectName}"`;
+            editProjectName.textContent = `For project: "${pendingSaveData.selectedEmoji ? pendingSaveData.selectedEmoji + ' ' : ''}${pendingSaveData.projectName}"`;
             editHoursInput.value = hours;
             editMinutesInput.value = minutes;
 
@@ -271,16 +317,13 @@
             const editedHours = parseInt(editHoursInput.value, 10) || 0;
             const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
             const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
-
-            // **FIX**: Calculate the new start time based on the edited duration.
-            // The end time is fixed to when the user clocked out.
+            
             const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
 
             postAuthAction = async () => {
                 clockOutBtn.textContent = 'Saving...';
                 try {
-                    // Pass the newly calculated start time to the event creation function.
-                    await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs);
+                    await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
                     showMessage(`Event created for "${pendingSaveData.projectName}"!`);
                 } catch (error) {
                     console.error('Full error object:', error);
@@ -303,16 +346,19 @@
             breakStartTime = null;
             totalBreakTime = 0;
             pendingSaveData = null;
+            selectedEmoji = null;
 
             clockInBtn.disabled = false;
             clockOutBtn.disabled = true;
             projectNameInput.disabled = false;
+            emojiPickerBtn.disabled = false;
             breakBtn.disabled = true;
             breakBtn.textContent = 'Start Break';
             breakBtn.classList.replace('bg-blue-500', 'bg-yellow-500');
             breakBtn.classList.replace('hover:bg-blue-600', 'hover:bg-yellow-600');
             
             projectNameInput.value = '';
+            emojiPickerBtn.textContent = '🎨';
             timerDisplay.textContent = '00:00:00';
             statusMessage.textContent = 'Ready to clock in.';
             statusMessage.classList.remove('text-green-500');
@@ -329,11 +375,11 @@
         }
 
         // --- GOOGLE CALENDAR LOGIC ---
-        async function createCalendarEvent(start, end, project, workedMs) {
+        async function createCalendarEvent(start, end, project, workedMs, emoji) {
             const totalMinutes = Math.floor(workedMs / 60000);
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
-            const eventTitle = `${project} - ${hours}h ${minutes}m (worked)`;
+            const eventTitle = `${emoji ? emoji + ' ' : ''}${project} - ${hours}h ${minutes}m (worked)`;
 
             const event = {
                 'summary': eventTitle,
@@ -356,5 +402,4 @@
     </script>
 </body>
 </html>
-
 
