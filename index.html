@@ -297,10 +297,8 @@
             playSound('click');
             if (breakState === 'idle') {
                 breakModal.classList.remove('hidden');
-            } else if (breakState === 'active') {
-                endBreak(true); // Manually ended early
-            } else if (breakState === 'finished') {
-                resumeWork();
+            } else if (breakState === 'active' || breakState === 'finished') {
+                resumeWork(); // End break early or resume after it finished
             }
         }
         
@@ -320,29 +318,26 @@
             statusMessage.textContent = "On Break";
         }
         
-        function endBreak(isManual) {
-            if (breakStartTime) {
-                 totalBreakTime += new Date() - breakStartTime;
-            }
-            breakStartTime = null;
+        function finishBreak() {
             clearInterval(breakInterval);
-            
-            if (isManual) {
-                resumeWork();
-            } else {
-                 // Break finished naturally, now wait for user
-                breakState = 'finished';
-                playSound('alarm');
-                statusMessage.textContent = "Break's Over!";
-                breakTimerDisplay.textContent = '00:00';
-                breakBtn.textContent = 'Resume Work';
-                breakBtn.classList.replace('bg-yellow-500', 'bg-green-500');
-                breakBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-green-600');
-            }
+            breakState = 'finished';
+            playSound('alarm');
+            statusMessage.textContent = "Break's Over!";
+            breakTimerDisplay.textContent = '00:00';
+            breakBtn.textContent = 'Resume Work';
+            breakBtn.classList.replace('bg-yellow-500', 'bg-green-500');
+            breakBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-green-600');
         }
         
         function resumeWork() {
             stopSound('alarm');
+
+            // **THE FIX**: Calculate the total elapsed break time only when resuming.
+            if (breakStartTime) {
+                totalBreakTime += new Date() - breakStartTime;
+                breakStartTime = null;
+            }
+
             breakState = 'idle';
             breakTimerDisplay.textContent = '';
             
@@ -361,7 +356,7 @@
             breakTimerDisplay.textContent = `Break ends in: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
             if (breakTimeLeft <= 0) {
-                endBreak(false); // Finished naturally
+                finishBreak(); // Finished naturally
             }
         }
 
@@ -487,4 +482,5 @@
     </script>
 </body>
 </html>
+
 
