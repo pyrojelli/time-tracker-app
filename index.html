@@ -44,43 +44,44 @@
         let synth, audioReady = false, alarmInterval = null;
 
         // --- INITIALIZATION ---
-        function gapiLoaded() { gapi.load('client', initializeGapiClient); }
+        function gapiLoaded() { 
+            console.log("GAPI script loaded.");
+            gapi.load('client', initializeGapiClient); 
+        }
         
         function gisLoaded() {
+            console.log("GIS script loaded.");
             try {
                 tokenClient = google.accounts.oauth2.initTokenClient({
                     client_id: CLIENT_ID, scope: SCOPES,
                     callback: async (tokenResponse) => {
                         if (tokenResponse.error) {
-                            console.error("Auth Error:", tokenResponse);
                             if (postAuthAction) {
-                                showMessage("Authorization failed. Event not saved.");
+                                reportError('gisLoaded/callback', tokenResponse);
                                 document.getElementById('clock-out-btn').disabled = false;
                                 document.getElementById('clock-out-btn').textContent = 'Clock Out';
                             }
                             postAuthAction = null; return;
                         }
 
-                        // *** FIX #1: EXPLICITLY SET THE AUTH TOKEN ***
                         // This is a critical step. After getting a token, we must explicitly
                         // tell the GAPI client library to use it for all subsequent requests.
-                        // Without this, the call to create a calendar event would fail.
                         gapi.client.setToken({ access_token: tokenResponse.access_token });
 
                         if (typeof postAuthAction === 'function') {
                             try { await postAuthAction(); } 
                             catch (e) {
-                                console.error("Error executing post-auth action:", e);
-                                const errorMessage = e.result?.error?.message || e.message || 'Unknown error.';
-                                showMessage(`Failed to complete action. Error: ${errorMessage}`);
+                                reportError('postAuthAction', e);
                             } finally { postAuthAction = null; }
                         }
                     },
                 });
                 gisInited = true;
+                console.log("GIS client initialized successfully.");
+                updateApiStatus();
             } catch (e) {
-                console.error("Error initializing GIS:", e);
-                showMessage("Error: Could not initialize Google Sign-In.");
+                reportError('gisLoaded/init', e);
+                updateApiStatus(true);
             }
         }
         async function initializeGapiClient() {
@@ -88,9 +89,11 @@
                 await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
                 await gapi.client.load('calendar', 'v3');
                 gapiInited = true;
+                console.log("GAPI client initialized successfully.");
+                updateApiStatus();
             } catch (e) {
-                console.error("Error initializing GAPI:", e);
-                showMessage("Error: Could not initialize Google API client.");
+                reportError('initializeGapiClient', e);
+                updateApiStatus(true);
             }
         }
     </script>
@@ -136,7 +139,7 @@
         </div>
         <div id="message-box" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
-                <p id="message-text" class="mb-4"></p>
+                <p id="message-text" class="mb-4 whitespace-pre-wrap text-left"></p>
                 <button id="message-ok-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg">OK</button>
             </div>
         </div>
@@ -173,18 +176,22 @@
                 <button id="cancel-break-selection-btn" class="w-full mt-4 bg-slate-300 hover:bg-slate-400 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
             </div>
         </div>
+        <!-- API Status Indicator -->
+        <p id="api-status" class="text-xs text-center text-slate-400 mt-4">Initializing Services...</p>
     </div>
     <script>
         let clockInBtn, clockOutBtn, projectNameInput, timerDisplay, statusMessage, messageBox, messageText, messageOkBtn, breakBtn, breakTimerDisplay;
         let editTimeModal, editProjectName, editHoursInput, editMinutesInput, saveEventBtn, cancelEditBtn;
         let emojiPickerBtn, emojiModal, emojiGrid;
         let breakModal, breakOptions, cancelBreakSelectionBtn;
+        let apiStatusIndicator;
         
         let timerInterval = null, startTime = null, isClockedIn = false, breakStartTime = null, totalBreakTime = 0, pendingSaveData = null, selectedEmoji = null;
         let breakInterval = null, breakTimeLeft = 0;
         let breakState = 'idle';
 
         document.addEventListener('DOMContentLoaded', () => {
+            // Cache all DOM elements
             clockInBtn = document.getElementById('clock-in-btn');
             clockOutBtn = document.getElementById('clock-out-btn');
             projectNameInput = document.getElementById('project-name');
@@ -207,7 +214,9 @@
             breakModal = document.getElementById('break-modal');
             breakOptions = document.getElementById('break-options');
             cancelBreakSelectionBtn = document.getElementById('cancel-break-selection-btn');
+            apiStatusIndicator = document.getElementById('api-status');
             
+            // Add event listeners
             clockInBtn.addEventListener('click', startTimer);
             clockOutBtn.addEventListener('click', stopTimerAndShowEditModal);
             breakBtn.addEventListener('click', handleBreak);
@@ -240,6 +249,20 @@
             populateEmojis();
             populateBreakOptions();
         });
+        
+        function updateApiStatus(isError = false) {
+            if (!apiStatusIndicator) return;
+            if (isError) {
+                apiStatusIndicator.textContent = 'Google Services: Error';
+                apiStatusIndicator.className = 'text-xs text-center text-red-500 mt-4';
+            } else if (gapiInited && gisInited) {
+                apiStatusIndicator.textContent = 'Google Services: Ready';
+                apiStatusIndicator.className = 'text-xs text-center text-green-500 mt-4';
+            } else {
+                apiStatusIndicator.textContent = 'Google Services: Initializing...';
+                apiStatusIndicator.className = 'text-xs text-center text-yellow-500 mt-4';
+            }
+        }
         
         async function initAudio() {
             if (audioReady) return;
@@ -397,18 +420,21 @@
         }
         
         function saveEditedEvent() {
+            console.log("Save event clicked.");
+            console.log(`API Status: gapiInited=${gapiInited}, gisInited=${gisInited}`);
+            console.log("Token client object:", tokenClient);
+
+            if (!gapiInited || !gisInited || typeof tokenClient === 'undefined') {
+                reportError("saveEditedEvent/pre-check", "Google services are not ready. Check API Status.");
+                return;
+            }
             if (!pendingSaveData) {
-                showMessage("Error: No session data to save. Please clock out again.");
+                reportError("saveEditedEvent/pre-check", "No session data found to save.");
                 editTimeModal.classList.add('hidden');
                 resetState();
                 return;
             }
 
-            if (!gapiInited || !gisInited || typeof tokenClient === 'undefined') {
-                showMessage("Google services are not ready. Please wait a moment and try again.");
-                return;
-            }
-            
             editTimeModal.classList.add('hidden');
             clockOutBtn.disabled = true;
             clockOutBtn.textContent = 'Authorizing...';
@@ -425,9 +451,7 @@
                     await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
                     showMessage(`Event created for "${pendingSaveData.projectName}"!`);
                 } catch (error) {
-                    console.error('Full error object:', error);
-                    const errorMessage = error.result?.error?.message || error.message || 'Unknown error.';
-                    showMessage(`Failed to create event. Error: ${errorMessage}`);
+                    reportError('saveEditedEvent/postAuthAction', error);
                 } finally {
                     clockOutBtn.textContent = 'Clock Out';
                     resetState();
@@ -435,14 +459,11 @@
             };
 
             try {
-                // *** FIX #2: USE A MORE STANDARD AUTH PROMPT ***
-                // Removing `prompt: 'consent'` uses the default, recommended behavior.
-                // It will only ask the user for permission if it's the first time or if
-                // access was revoked, making it less intrusive and more reliable.
+                // This is the recommended default auth prompt. It will only ask for consent
+                // if it's the first time or if the user has revoked access.
                 tokenClient.requestAccessToken();
             } catch (e) {
-                console.error("An error occurred when calling requestAccessToken:", e);
-                showMessage("An unexpected error occurred during authorization.");
+                reportError('saveEditedEvent/requestAccessToken', e);
                 clockOutBtn.disabled = false;
                 clockOutBtn.textContent = 'Clock Out';
                 postAuthAction = null;
@@ -500,8 +521,41 @@
             await gapi.client.calendar.events.insert({ 'calendarId': CALENDAR_ID, 'resource': event });
         }
         function showMessage(message) {
-            messageText.textContent = message;
+            messageText.innerText = message; // Use innerText to preserve newlines
             messageBox.classList.remove('hidden');
+        }
+
+        function reportError(sourceFunction, errorObject) {
+            console.error(`[${sourceFunction}]`, errorObject); // Keep detailed console log
+
+            // Generate a simple, unique ID for this error instance
+            const errorId = `E${Date.now().toString().slice(-6)}`;
+
+            // Try to extract a meaningful message from the error
+            let detailedMessage = 'No details available.';
+            if (errorObject) {
+                if (typeof errorObject === 'string') {
+                    detailedMessage = errorObject;
+                } else if (errorObject.result?.error?.message) {
+                    detailedMessage = errorObject.result.error.message;
+                } else if (errorObject.message) {
+                    detailedMessage = errorObject.message;
+                } else if (errorObject.error) {
+                    detailedMessage = JSON.stringify(errorObject.error);
+                } else {
+                    try {
+                        // A more robust way to stringify, including non-enumerable properties
+                        detailedMessage = JSON.stringify(errorObject, Object.getOwnPropertyNames(errorObject));
+                    } catch {
+                        detailedMessage = 'Could not stringify the error object.';
+                    }
+                }
+            }
+
+            // Format the message for the user
+            const userMessage = `An unexpected error occurred.\n\nPlease report the following code:\nID: ${errorId}\nSource: ${sourceFunction}\nDetails: ${detailedMessage}`;
+
+            showMessage(userMessage);
         }
     </script>
 </body>
