@@ -406,8 +406,7 @@
                 try {
                     await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
                     showMessage(`Event created for "${pendingSaveData.projectName}"!`);
-                    playSound('bell');
-                } catch (error {
+                } catch (error) {
                     console.error('Full error object:', error);
                     const errorMessage = error.result?.error?.message || error.message || 'Unknown error.';
                     showMessage(`Failed to create event. Error: ${errorMessage}`);
