@@ -400,18 +400,21 @@
         }
 
         function saveEditedEvent() {
-            if (!gapiInited || !gisInited || !tokenClient) {
-                showMessage("Google services are not ready. Please wait a moment and try again.");
+            // **FIX**: More robust check for service readiness.
+            if (!gapiInited || !gisInited || typeof tokenClient === 'undefined') {
+                showMessage("Google services are still initializing. Please wait a moment and try again.");
                 return;
             }
 
             editTimeModal.classList.add('hidden');
             clockOutBtn.disabled = true;
             clockOutBtn.textContent = 'Authorizing...';
+
             const editedHours = parseInt(editHoursInput.value, 10) || 0;
             const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
             const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
             const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
+            
             postAuthAction = async () => {
                 clockOutBtn.textContent = 'Saving...';
                 try {
@@ -426,6 +429,7 @@
                     resetState();
                 }
             };
+            
             tokenClient.requestAccessToken({ prompt: 'consent' });
         }
 
