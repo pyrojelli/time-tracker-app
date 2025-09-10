@@ -378,17 +378,15 @@
             editTimeModal.classList.remove('hidden');
         }
         
-        // **THE DEFINITIVE FIX**: This function now waits for the APIs to be ready if they aren't.
         async function saveEditedEvent() {
-            // Wait for APIs to be ready before doing anything else.
-            await new Promise((resolve) => {
-                const interval = setInterval(() => {
-                    if (gapiInited && gisInited) {
-                        clearInterval(interval);
-                        resolve();
-                    }
-                }, 100);
-            });
+            // **THE REAL FIX**: This function now waits for the APIs to be ready if they aren't.
+            if (!gapiInited || !gisInited) {
+                showMessage("Google services are still initializing. Please wait a moment and try again.");
+                // We don't want to get stuck, so we reset the button and modal.
+                clockOutBtn.disabled = false;
+                clockOutBtn.textContent = 'Clock Out';
+                return;
+            }
 
             editTimeModal.classList.add('hidden');
             clockOutBtn.disabled = true;
