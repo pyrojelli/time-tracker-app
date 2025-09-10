@@ -88,6 +88,8 @@
         async function initializeGapiClient() {
             try {
                 await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
+                // Pre-load the calendar client library to prevent delays and potential errors during the save operation.
+                await gapi.client.load('calendar', 'v3');
                 gapiInited = true;
             } catch (e) {
                 console.error("Error initializing GAPI:", e);
@@ -398,6 +400,17 @@
         }
         
         function saveEditedEvent() {
+            // *** FIX APPLIED HERE ***
+            // Added a check to ensure session data exists. If it's missing,
+            // a JS error would occur, stopping the function silently. This
+            // provides a clear error message to the user instead.
+            if (!pendingSaveData) {
+                showMessage("Error: No session data to save. Please clock out again.");
+                editTimeModal.classList.add('hidden');
+                resetState();
+                return;
+            }
+
             // This check ensures the Google libraries have loaded before we try to use them.
             if (!gapiInited || !gisInited || typeof tokenClient === 'undefined') {
                 showMessage("Google services are not ready. Please wait a moment and try again.");
@@ -473,7 +486,7 @@
         }
 
         async function createCalendarEvent(start, end, project, workedMs, emoji) {
-             if (!gapi.client.calendar) await gapi.client.load('calendar', 'v3');
+            // The client library is now pre-loaded during initialization, so we don't need to load it here.
             const totalMinutes = Math.floor(workedMs / 60000);
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
@@ -492,4 +505,5 @@
     </script>
 </body>
 </html>
+
 
