@@ -272,10 +272,15 @@
             const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
             const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
 
+            // **FIX**: Calculate the new start time based on the edited duration.
+            // The end time is fixed to when the user clocked out.
+            const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
+
             postAuthAction = async () => {
                 clockOutBtn.textContent = 'Saving...';
                 try {
-                    await createCalendarEvent(pendingSaveData.startTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs);
+                    // Pass the newly calculated start time to the event creation function.
+                    await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs);
                     showMessage(`Event created for "${pendingSaveData.projectName}"!`);
                 } catch (error) {
                     console.error('Full error object:', error);
@@ -351,4 +356,5 @@
     </script>
 </body>
 </html>
+
 
