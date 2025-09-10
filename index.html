@@ -226,7 +226,7 @@
                     timerInterval = setInterval(updateTimerDisplay, 1000);
                 }
             });
-            saveEventBtn.addEventListener('click', () => { saveEditedEvent(); playSound('confirm'); });
+            saveEventBtn.addEventListener('click', saveEditedEvent);
             emojiPickerBtn.addEventListener('click', () => { emojiModal.classList.remove('hidden'); playSound('click'); });
             emojiModal.addEventListener('click', (e) => { if (e.target === emojiModal) emojiModal.classList.add('hidden'); });
             cancelBreakSelectionBtn.addEventListener('click', () => {
@@ -401,9 +401,11 @@
         
         function saveEditedEvent() {
             // *** FIX APPLIED HERE ***
-            // Added a check to ensure session data exists. If it's missing,
-            // a JS error would occur, stopping the function silently. This
-            // provides a clear error message to the user instead.
+            // This function has been restructured to ensure the authorization request
+            // happens as directly as possible after the user click, which helps prevent
+            // issues with popup blockers and ensures the auth flow starts reliably.
+
+            // 1. First, perform checks to ensure we can proceed.
             if (!pendingSaveData) {
                 showMessage("Error: No session data to save. Please clock out again.");
                 editTimeModal.classList.add('hidden');
@@ -411,22 +413,27 @@
                 return;
             }
 
-            // This check ensures the Google libraries have loaded before we try to use them.
             if (!gapiInited || !gisInited || typeof tokenClient === 'undefined') {
                 showMessage("Google services are not ready. Please wait a moment and try again.");
                 return;
             }
             
+            // 2. Hide the modal and update UI to show that we are proceeding.
             editTimeModal.classList.add('hidden');
             clockOutBtn.disabled = true;
             clockOutBtn.textContent = 'Authorizing...';
-            const editedHours = parseInt(editHoursInput.value, 10) || 0;
-            const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
-            const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
-            const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
+            playSound('confirm');
+
+            // 3. Define the action that will run *after* successful authorization.
+            // All the event creation logic is bundled here.
             postAuthAction = async () => {
                 clockOutBtn.textContent = 'Saving...';
                 try {
+                    const editedHours = parseInt(editHoursInput.value, 10) || 0;
+                    const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
+                    const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
+                    const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
+
                     await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
                     showMessage(`Event created for "${pendingSaveData.projectName}"!`);
                 } catch (error) {
@@ -438,13 +445,17 @@
                     resetState();
                 }
             };
-            // *** Authorization Step ***
-            // This is the key moment. We are now requesting an access token from Google.
-            // Because this happens right before we need to save the event, we are guaranteed
-            // to have a fresh, unexpired token, resolving the concern about long work sessions.
-            // This will trigger the Google Auth popup if the user is not signed in or
-            // needs to grant permissions.
-            tokenClient.requestAccessToken({ prompt: 'consent' });
+
+            // 4. Finally, trigger the authorization request. This should now reliably open the popup.
+            try {
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+            } catch (e) {
+                console.error("An error occurred when calling requestAccessToken:", e);
+                showMessage("An unexpected error occurred during authorization.");
+                clockOutBtn.disabled = false;
+                clockOutBtn.textContent = 'Clock Out';
+                postAuthAction = null; // Clear the pending action since auth failed to even start.
+            }
         }
 
         function resetState() {
@@ -505,5 +516,4 @@
     </script>
 </body>
 </html>
-
 
