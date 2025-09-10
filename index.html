@@ -384,33 +384,43 @@
             editTimeModal.classList.remove('hidden');
         }
         
-function saveEditedEvent() {
-    console.log("Save event clicked.");
-    if (!pendingSaveData) {
-        reportError("saveEditedEvent/pre-check", "No session data found to save.");
-        return;
-    }
+        function saveEditedEvent() {
+            console.log("Save event clicked.");
+            if (!pendingSaveData) {
+                reportError("saveEditedEvent/pre-check", "No session data found to save.");
+                return;
+            }
 
-    /*
-    // --- THIS CHECK IS TEMPORARILY DISABLED FOR OUR TEST ---
-    if (!gapiInited || !gisInited || !tokenClient) {
-        reportError("saveEditedEvent/pre-check", "Google services could not be initialized...");
-        return;
-    }
-    */
+            if (!gapiInited || !gisInited || !tokenClient) {
+                reportError("saveEditedEvent/pre-check", "Google services could not be initialized. This might be due to a network issue or a browser extension (like an ad-blocker) preventing connection to Google's servers. Please reload the page and try again.");
+                return;
+            }
 
-    editTimeModal.classList.add('hidden');
-    clockOutBtn.disabled = true;
-    clockOutBtn.textContent = 'Authorizing...';
-    playSound('confirm');
+            editTimeModal.classList.add('hidden');
+            clockOutBtn.disabled = true;
+            clockOutBtn.textContent = 'Authorizing...';
+            playSound('confirm');
 
-    postAuthAction = async () => {
-        // ... same as before ...
-    };
-
-    // This line will now cause a crash
-    tokenClient.requestAccessToken({ prompt: 'consent' });
-}
+            postAuthAction = async () => {
+                clockOutBtn.textContent = 'Saving...';
+                try {
+                    const editedHours = parseInt(editHoursInput.value, 10) || 0;
+                    const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
+                    const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
+                    const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
+                    await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
+                    showMessage(`Event created for "${pendingSaveData.projectName}"!`);
+                } catch (error) {
+                    reportError('saveEditedEvent/postAuthAction', error);
+                } finally {
+                    clockOutBtn.textContent = 'Clock Out';
+                    resetState();
+                }
+            };
+            
+            // This forces the consent screen to appear for the user.
+            tokenClient.requestAccessToken({ prompt: 'consent' });
+        }
 
         function resetState() {
             isClockedIn = false;
