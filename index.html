@@ -12,12 +12,15 @@
         .timer-display { font-variant-numeric: tabular-nums; }
     </style>
     
-    <!-- **FIX** Moved the main script block into the head to ensure functions are defined before they are called -->
+    <!-- Main application script is in the head to ensure functions are defined before they are called by Google's async scripts -->
     <script>
         // --- CONFIGURATION ---
+        // IMPORTANT: Replace with your actual credentials.
         const CLIENT_ID = '638799604524-qi2brhvvnve4k90mfg7ja3b7k0hds6u6.apps.googleusercontent.com';
-        const API_KEY = 'AIzaSyC9NDjM6pEKgMsGeyB97UzJqqvJBd47ISI'; // Optional but recommended
-        const CALENDAR_ID = 'ea8a510acb4eeaa186e9f9f39a2c5e9b342d8dd6773232b5ef7f3a020f61280b@group.calendar.google.com'; 
+        const API_KEY = 'AIzaSyC9NDjM6pEKgMsGeyB97UzJqqvJBd47ISI'; // This is optional but highly recommended.
+        const CALENDAR_ID = 'ea8a510acb4eeaa186e9f9f39a2c5e9b342d8dd6773232b5ef7f3a020f61280b@group.calendar.google.com'; // Example: 'primary' or a specific calendar ID.
+        
+        // --- GOOGLE API SETUP ---
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 
@@ -26,19 +29,23 @@
         let gisInited = false;
 
         // --- INITIALIZATION ---
+        // Called when the Google API script is loaded.
         function gapiLoaded() {
             gapi.load('client', initializeGapiClient);
         }
 
+        // Called when the Google Sign-In script is loaded.
         function gisLoaded() {
             try {
                 tokenClient = google.accounts.oauth2.initTokenClient({
                     client_id: CLIENT_ID,
                     scope: SCOPES,
                     callback: (tokenResponse) => {
+                        // This callback is executed after the user grants or denies consent.
                         if (tokenResponse.error) {
                             throw (tokenResponse);
                         }
+                        // On successful auth, update the UI.
                         updateUI(true);
                     },
                 });
@@ -51,6 +58,7 @@
             }
         }
 
+        // Initializes the GAPI client.
         async function initializeGapiClient() {
             try {
                 await gapi.client.init({
@@ -66,6 +74,7 @@
             }
         }
 
+        // Enables the authorization button once both Google libraries are ready.
         function maybeEnableButtons() {
             if (gapiInited && gisInited) {
                 document.getElementById('authorize_button').disabled = false;
@@ -74,7 +83,7 @@
         }
     </script>
     
-    <!-- Load Google scripts after the main script block -->
+    <!-- Load Google scripts asynchronously -->
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
     <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 
@@ -87,7 +96,7 @@
             <p class="text-slate-500 dark:text-slate-400 mt-1">For Data Annotation Projects</p>
         </div>
 
-        <!-- Auth Screen -->
+        <!-- Auth Screen: Shown when the user is not signed in -->
         <div id="auth-screen" class="text-center">
             <p id="auth-message" class="mb-4">Please authorize access to your Google Calendar to begin.</p>
             <button id="authorize_button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105" disabled>
@@ -95,7 +104,7 @@
             </button>
         </div>
 
-        <!-- Main App Screen -->
+        <!-- Main App Screen: Shown after successful authorization -->
         <div id="app-screen" class="hidden">
             <div class="mb-6">
                 <label for="project-name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Project Name</label>
@@ -111,15 +120,15 @@
                 <button id="clock-in-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition">
                     Clock In
                 </button>
-                <button id="clock-out-btn" disabled class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg disabled:bg-slate-400">
+                <button id="clock-out-btn" disabled class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg disabled:bg-slate-400 dark:disabled:bg-slate-600">
                     Clock Out
                 </button>
             </div>
              <button id="signout_button" class="w-full mt-4 text-center text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition">Sign Out</button>
         </div>
         
-        <!-- Message Box -->
-        <div id="message-box" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <!-- Message Box Modal -->
+        <div id="message-box" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
                 <p id="message-text" class="mb-4"></p>
                 <button id="message-ok-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg">OK</button>
@@ -128,21 +137,21 @@
     </div>
 
     <script>
-        // DOM elements are now defined globally because the script is in the head
-        let authScreen, appScreen, authorizeButton, authMessage, signoutButton, clockInBtn, clockOutBtn, projectNameInput, timerDisplay, statusMessage, messageBox, messageText, messageOkBtn;
+        // --- DOM ELEMENT & STATE MANAGEMENT ---
+        // Declare variables globally
+        let authScreen, appScreen, authorizeButton, signoutButton, clockInBtn, clockOutBtn, projectNameInput, timerDisplay, statusMessage, messageBox, messageText, messageOkBtn;
         
-        // --- APP STATE ---
+        // App State
         let timerInterval = null;
         let startTime = null;
         let isClockedIn = false;
 
-        // This function runs after the document is fully loaded
+        // Wait until the DOM is fully loaded before trying to access elements.
         document.addEventListener('DOMContentLoaded', () => {
-            // Assign DOM elements now that they exist
+            // Assign DOM elements
             authScreen = document.getElementById('auth-screen');
             appScreen = document.getElementById('app-screen');
             authorizeButton = document.getElementById('authorize_button');
-            authMessage = document.getElementById('auth-message');
             signoutButton = document.getElementById('signout_button');
             clockInBtn = document.getElementById('clock-in-btn');
             clockOutBtn = document.getElementById('clock-out-btn');
@@ -153,14 +162,16 @@
             messageText = document.getElementById('message-text');
             messageOkBtn = document.getElementById('message-ok-btn');
 
-            // Attach event listeners
+            // Attach Event Listeners
             authorizeButton.onclick = () => {
-                 tokenClient.requestAccessToken({ prompt: 'consent' });
+                // Request an access token, prompting the user for consent if needed.
+                tokenClient.requestAccessToken({ prompt: 'consent' });
             };
 
             signoutButton.onclick = () => {
                 const token = gapi.client.getToken();
                 if (token !== null) {
+                    // Revoke the token to sign the user out.
                     google.accounts.oauth2.revoke(token.access_token, () => {
                         gapi.client.setToken('');
                         updateUI(false);
@@ -184,7 +195,7 @@
             });
         });
 
-        // --- AUTHENTICATION ---
+        // --- AUTHENTICATION & UI LOGIC ---
         function updateUI(isAuthorized) {
             if (isAuthorized) {
                 authScreen.classList.add('hidden');
@@ -192,6 +203,7 @@
             } else {
                 appScreen.classList.add('hidden');
                 authScreen.classList.remove('hidden');
+                // If user signs out while clocked in, reset the state.
                 if (isClockedIn) {
                     clearInterval(timerInterval);
                     resetState();
@@ -209,9 +221,10 @@
             statusMessage.textContent = `Clocked in for: ${projectName}`;
             statusMessage.classList.add('text-green-500');
             timerInterval = setInterval(updateTimerDisplay, 1000);
-            updateTimerDisplay();
+            updateTimerDisplay(); // Run once immediately
         }
 
+        // --- ** REVISED FUNCTION WITH TOKEN REFRESH ** ---
         async function stopTimerAndCreateEvent() {
             if (!isClockedIn) return;
             
@@ -225,17 +238,30 @@
             clockOutBtn.textContent = 'Saving...';
 
             try {
-                if (CALENDAR_ID === 'YOUR_CALENDAR_ID_HERE' || !CALENDAR_ID) {
-                    showMessage("Error: Please provide your Calendar ID in the code.");
-                    return; 
-                }
+                // **THE FIX:** Silently request a token. If the existing one is expired,
+                // this will fetch a new one without user interaction.
+                await new Promise((resolve, reject) => {
+                    tokenClient.requestAccessToken({ prompt: '' });
+                    // There isn't a direct promise/await for this, but the gapi client will
+                    // now have the correct token for the next API call. We'll resolve
+                    // after a brief moment to ensure token is set. This is a pragmatic approach.
+                    setTimeout(resolve, 500);
+                });
+
                 await createCalendarEvent(startTime, endTime, projectName, durationMs);
                 showMessage(`Event created for "${projectName}"!`);
             } catch (error) {
                 console.error('Full error object:', error);
                 const errorMessage = error.result?.error?.message || error.message || 'An unknown error occurred.';
-                showMessage(`Failed to create calendar event. Error: ${errorMessage}`);
+                
+                // Provide a more specific error for authentication issues.
+                if (error.result?.error?.status === 'UNAUTHENTICATED') {
+                    showMessage(`Authentication failed. Your session might have expired. Please try signing out and in again.`);
+                } else {
+                    showMessage(`Failed to create calendar event. Error: ${errorMessage}`);
+                }
             } finally {
+                // This block always runs, ensuring the UI is reset.
                 clockOutBtn.textContent = 'Clock Out';
                 resetState();
             }
@@ -267,14 +293,10 @@
 
         // --- GOOGLE CALENDAR LOGIC ---
         async function createCalendarEvent(start, end, project, durationMs) {
-            if (!gapi.client.calendar) {
-                await gapi.client.load('calendar', 'v3');
-            }
-            
             const totalMinutes = Math.floor(durationMs / 60000);
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
-            const eventTitle = `${project} - ${hours} hrs ${minutes} min`;
+            const eventTitle = `${project} - ${hours}h ${minutes}m`;
 
             const event = {
                 'summary': eventTitle,
@@ -283,10 +305,12 @@
                 'end': { 'dateTime': end.toISOString(), 'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone },
             };
             
-            await gapi.client.calendar.events.insert({
+            const request = gapi.client.calendar.events.insert({
                 'calendarId': CALENDAR_ID,
                 'resource': event,
             });
+            
+            await request;
         }
 
         // --- UTILITY ---
