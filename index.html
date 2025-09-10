@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DA Time Tracker</title>
     
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn/tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -16,11 +16,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
 
     <!-- 
-        *** FIX APPLIED HERE ***
         These scripts load the necessary Google libraries.
         The 'onload' parameter in the URL tells the script which function to call
-        once it has finished loading. Without these, your `gapiLoaded` and `gisLoaded`
-        functions were never being executed, so the authentication client was never initialized.
+        once it has finished loading.
     -->
     <script async defer src="https://apis.google.com/js/api.js?onload=gapiLoaded"></script>
     <script async defer src="https://accounts.google.com/gsi/client?onload=gisLoaded"></script>
@@ -30,8 +28,6 @@
         // --- CONFIGURATION ---
         const CLIENT_ID = '638799604524-qi2brhvvnve4k90mfg7ja3b7k0hds6u6.apps.googleusercontent.com';
         // IMPORTANT: Storing API Keys directly in client-side code is not recommended for production.
-        // This is okay for personal projects, but for a public application, this key should be
-        // managed through a backend server to prevent misuse.
         const API_KEY = 'AIzaSyC9NDjM6pEKgMsGeyB97UzJqqvJBd47ISI';
         const CALENDAR_ID = 'ea8a510acb4eeaa186e9f9f39a2c5e9b342d8dd6773232b5ef7f3a020f61280b@group.calendar.google.com';
         
@@ -48,15 +44,10 @@
         let synth, audioReady = false, alarmInterval = null;
 
         // --- INITIALIZATION ---
-        // This function is the callback for the Google API script.
         function gapiLoaded() { gapi.load('client', initializeGapiClient); }
         
-        // This function is the callback for the Google Identity Services script.
         function gisLoaded() {
             try {
-                // This initializes the Google Auth client but does NOT trigger a login or
-                // request a token. It simply prepares the client to be used later when
-                // the user decides to save an event. This is done on page load for efficiency.
                 tokenClient = google.accounts.oauth2.initTokenClient({
                     client_id: CLIENT_ID, scope: SCOPES,
                     callback: async (tokenResponse) => {
@@ -69,6 +60,13 @@
                             }
                             postAuthAction = null; return;
                         }
+
+                        // *** FIX #1: EXPLICITLY SET THE AUTH TOKEN ***
+                        // This is a critical step. After getting a token, we must explicitly
+                        // tell the GAPI client library to use it for all subsequent requests.
+                        // Without this, the call to create a calendar event would fail.
+                        gapi.client.setToken({ access_token: tokenResponse.access_token });
+
                         if (typeof postAuthAction === 'function') {
                             try { await postAuthAction(); } 
                             catch (e) {
@@ -88,7 +86,6 @@
         async function initializeGapiClient() {
             try {
                 await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
-                // Pre-load the calendar client library to prevent delays and potential errors during the save operation.
                 await gapi.client.load('calendar', 'v3');
                 gapiInited = true;
             } catch (e) {
@@ -400,12 +397,6 @@
         }
         
         function saveEditedEvent() {
-            // *** FIX APPLIED HERE ***
-            // This function has been restructured to ensure the authorization request
-            // happens as directly as possible after the user click, which helps prevent
-            // issues with popup blockers and ensures the auth flow starts reliably.
-
-            // 1. First, perform checks to ensure we can proceed.
             if (!pendingSaveData) {
                 showMessage("Error: No session data to save. Please clock out again.");
                 editTimeModal.classList.add('hidden');
@@ -418,14 +409,11 @@
                 return;
             }
             
-            // 2. Hide the modal and update UI to show that we are proceeding.
             editTimeModal.classList.add('hidden');
             clockOutBtn.disabled = true;
             clockOutBtn.textContent = 'Authorizing...';
             playSound('confirm');
 
-            // 3. Define the action that will run *after* successful authorization.
-            // All the event creation logic is bundled here.
             postAuthAction = async () => {
                 clockOutBtn.textContent = 'Saving...';
                 try {
@@ -446,15 +434,18 @@
                 }
             };
 
-            // 4. Finally, trigger the authorization request. This should now reliably open the popup.
             try {
-                tokenClient.requestAccessToken({ prompt: 'consent' });
+                // *** FIX #2: USE A MORE STANDARD AUTH PROMPT ***
+                // Removing `prompt: 'consent'` uses the default, recommended behavior.
+                // It will only ask the user for permission if it's the first time or if
+                // access was revoked, making it less intrusive and more reliable.
+                tokenClient.requestAccessToken();
             } catch (e) {
                 console.error("An error occurred when calling requestAccessToken:", e);
                 showMessage("An unexpected error occurred during authorization.");
                 clockOutBtn.disabled = false;
                 clockOutBtn.textContent = 'Clock Out';
-                postAuthAction = null; // Clear the pending action since auth failed to even start.
+                postAuthAction = null;
             }
         }
 
@@ -497,7 +488,6 @@
         }
 
         async function createCalendarEvent(start, end, project, workedMs, emoji) {
-            // The client library is now pre-loaded during initialization, so we don't need to load it here.
             const totalMinutes = Math.floor(workedMs / 60000);
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
