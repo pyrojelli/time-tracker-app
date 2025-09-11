@@ -13,6 +13,7 @@
     </style>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    
     <script async defer src="https://apis.google.com/js/api.js?onload=gapiLibraryLoaded"></script>
     <script async defer src="https://accounts.google.com/gsi/client?onload=gisLibraryLoaded"></script>
 
@@ -24,10 +25,7 @@
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 
-        let tokenClient;
-        let postAuthAction = null;
-        
-        // These callbacks simply log success. We will check for the libraries directly later.
+        // These callbacks confirm the scripts were downloaded by the browser.
         function gapiLibraryLoaded() { console.log("Google API library loaded."); }
         function gisLibraryLoaded() { console.log("Google Sign-In library loaded."); }
 
@@ -42,6 +40,7 @@
         let synth, audioReady = false, alarmInterval = null;
 
         document.addEventListener('DOMContentLoaded', () => {
+            // Cache all DOM elements
             clockInBtn = document.getElementById('clock-in-btn'); clockOutBtn = document.getElementById('clock-out-btn'); projectNameInput = document.getElementById('project-name');
             timerDisplay = document.getElementById('timer-display'); statusMessage = document.getElementById('status-message'); messageBox = document.getElementById('message-box');
             messageText = document.getElementById('message-text'); messageOkBtn = document.getElementById('message-ok-btn'); breakBtn = document.getElementById('break-btn');
@@ -51,6 +50,7 @@
             emojiPickerBtn = document.getElementById('emoji-picker-btn'); emojiModal = document.getElementById('emoji-modal'); emojiGrid = document.getElementById('emoji-grid');
             breakModal = document.getElementById('break-modal'); breakOptions = document.getElementById('break-options'); cancelBreakSelectionBtn = document.getElementById('cancel-break-selection-btn');
             
+            // Add all event listeners
             clockInBtn.addEventListener('click', startTimer); clockOutBtn.addEventListener('click', stopTimerAndShowEditModal); breakBtn.addEventListener('click', handleBreak);
             messageOkBtn.addEventListener('click', () => { messageBox.classList.add('hidden'); playSound('click'); });
             cancelEditBtn.addEventListener('click', () => {
@@ -63,7 +63,7 @@
                     timerInterval = setInterval(updateTimerDisplay, 1000);
                 }
             });
-            saveEventBtn.addEventListener('click', handleAuthAndSave); // Changed to the new handler function
+            saveEventBtn.addEventListener('click', handleSaveEvent);
             emojiPickerBtn.addEventListener('click', () => { emojiModal.classList.remove('hidden'); playSound('click'); });
             emojiModal.addEventListener('click', (e) => { if (e.target === emojiModal) emojiModal.classList.add('hidden'); });
             cancelBreakSelectionBtn.addEventListener('click', () => {
@@ -77,75 +77,76 @@
             populateEmojis(); populateBreakOptions();
         });
 
-        async function handleAuthAndSave() {
+        async function handleSaveEvent() {
             playSound('confirm');
             clockOutBtn.disabled = true;
-            clockOutBtn.textContent = 'Authorizing...';
+            clockOutBtn.textContent = 'Initializing...';
+            editTimeModal.classList.add('hidden');
 
-            // **NEW ROBUST CHECKING**
-            // Check if the Google Sign-In library (GSI) failed to load.
-            if (typeof google === 'undefined' || typeof google.accounts === 'undefined') {
-                reportError('handleAuthAndSave', "The Google Sign-In script failed to load. This is often caused by ad-blockers or privacy extensions. Please disable them and reload the page.");
-                clockOutBtn.disabled = false; clockOutBtn.textContent = 'Clock Out';
+            // 1. Check if the base Google script objects exist. If not, the scripts failed to load.
+            if (typeof gapi === 'undefined' || typeof google === 'undefined') {
+                reportError('handleSaveEvent', "A Google library script failed to load. This can be caused by network issues or an ad-blocker. Please try reloading the page.");
+                resetState();
                 return;
             }
 
-            // Check if the Google API library (GAPI) failed to load.
-            if (typeof gapi === 'undefined' || typeof gapi.client === 'undefined') {
-                reportError('handleAuthAndSave', "The Google API script failed to load. This is often caused by ad-blockers or privacy extensions. Please disable them and reload the page.");
-                clockOutBtn.disabled = false; clockOutBtn.textContent = 'Clock Out';
-                return;
-            }
-
-            // If checks pass, initialize clients and request the token.
             try {
-                // Initialize the GAPI client for the Calendar API
-                await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
-                await gapi.client.load('calendar', 'v3');
+                // 2. Load the specific 'client' library required for API calls. This was the missing step.
+                // We wrap this callback-based function in a Promise to use modern async/await syntax.
+                await new Promise((resolve, reject) => gapi.load('client', { callback: resolve, onerror: reject }));
 
-                // Define what to do after the user signs in successfully
-                postAuthAction = async () => {
-                    clockOutBtn.textContent = 'Saving...';
-                    try {
-                        const editedHours = parseInt(editHoursInput.value, 10) || 0;
-                        const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
-                        const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
-                        const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
-                        await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
-                        showMessage(`Event created for "${pendingSaveData.projectName}"!`);
-                    } catch (error) {
-                        reportError('saveAction', error);
-                    } finally {
-                        clockOutBtn.textContent = 'Clock Out';
-                        resetState();
-                    }
-                };
+                // 3. Initialize the GAPI client with API Key and discovery document.
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: [DISCOVERY_DOC],
+                });
+
+                // 4. Load the specific Calendar API module.
+                await gapi.client.load('calendar', 'v3');
                 
-                // Initialize the token client and trigger the pop-up
-                tokenClient = google.accounts.oauth2.initTokenClient({
-                    client_id: CLIENT_ID, scope: SCOPES,
+                clockOutBtn.textContent = 'Authorizing...';
+
+                // 5. Initialize the OAuth token client and define the callback for a successful sign-in.
+                const tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
                     callback: async (tokenResponse) => {
                         if (tokenResponse.error) {
                             reportError('gisCallback', tokenResponse);
-                            resetState(); // Reset on auth failure
+                            resetState();
                             return;
                         }
+                        
+                        clockOutBtn.textContent = 'Saving...';
                         gapi.client.setToken({ access_token: tokenResponse.access_token });
-                        if (typeof postAuthAction === 'function') {
-                            await postAuthAction();
-                            postAuthAction = null;
+                        
+                        // This block runs AFTER the user has successfully authorized the app.
+                        try {
+                            const editedHours = parseInt(editHoursInput.value, 10) || 0;
+                            const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
+                            const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
+                            const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
+                            
+                            await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
+                            showMessage(`Event created for "${pendingSaveData.projectName}"!`);
+                        } catch (saveError) {
+                            reportError('saveAction', saveError);
+                        } finally {
+                            resetState();
                         }
                     },
                 });
 
-                editTimeModal.classList.add('hidden');
+                // 6. Request the access token, which triggers the Google Auth pop-up for the user.
                 tokenClient.requestAccessToken({ prompt: 'consent' });
 
             } catch (error) {
-                reportError('handleAuthAndSave', error);
-                clockOutBtn.disabled = false; clockOutBtn.textContent = 'Clock Out';
+                reportError('initAndAuth', error);
+                resetState();
             }
         }
+        
+        // --- CORE APP & HELPER FUNCTIONS (UNCHANGED) ---
 
         async function initAudio() { if (audioReady) return; await Tone.start(); synth = new Tone.Synth().toDestination(); audioReady = true; }
         function playSound(type) { if (!audioReady) return; const now = Tone.now(); if (type === 'click') synth.triggerAttackRelease("C4", "8n", now); if (type === 'confirm') synth.triggerAttackRelease("G4", "8n", now); if (type === 'alarm') { if (alarmInterval) return; alarmInterval = setInterval(() => { const alarmSynth = new Tone.Synth().toDestination(); const now = Tone.now(); alarmSynth.triggerAttackRelease("A5", "16n", now); alarmSynth.triggerAttackRelease("E5", "16n", now + 0.1); }, 400); setTimeout(() => stopSound('alarm'), 10000); } }
