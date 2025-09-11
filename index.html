@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DA Time Tracker (TESTING)</title>
+    <title>DA Time Tracker</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,8 +13,8 @@
     </style>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
-    <script async defer src="https://apis.google.com/js/api.js?onload=gapiLoaded"></script>
-    <script async defer src="https://accounts.google.com/gsi/client?onload=gisLoaded"></script>
+    <script async defer src="https://apis.google.com/js/api.js?onload=gapiLibraryLoaded"></script>
+    <script async defer src="https://accounts.google.com/gsi/client?onload=gisLibraryLoaded"></script>
 
     <script>
         // --- CONFIGURATION ---
@@ -25,44 +25,13 @@
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 
         let tokenClient;
-        let gapiInited = false, gisInited = false, postAuthAction = null;
-        let synth, audioReady = false, alarmInterval = null;
+        let postAuthAction = null;
         
-        function gapiLoaded() { gapi.load('client', initializeGapiClient); }
-        async function initializeGapiClient() {
-            try {
-                await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
-                await gapi.client.load('calendar', 'v3');
-                gapiInited = true;
-                console.log("GAPI client initialized.");
-            } catch (e) { console.error("Error initializing GAPI client:", e); }
-        }
-        function gisLoaded() {
-            try {
-                tokenClient = google.accounts.oauth2.initTokenClient({
-                    client_id: CLIENT_ID, scope: SCOPES,
-                    callback: async (tokenResponse) => {
-                        if (tokenResponse.error) {
-                            if (postAuthAction) {
-                                reportError('gisCallback', tokenResponse);
-                                document.getElementById('clock-out-btn').disabled = false;
-                                document.getElementById('clock-out-btn').textContent = 'Clock Out';
-                            }
-                            postAuthAction = null; return;
-                        }
-                        gapi.client.setToken({ access_token: tokenResponse.access_token });
-                        if (typeof postAuthAction === 'function') {
-                            try { await postAuthAction(); } 
-                            catch (e) { reportError('postAuthAction', e); } 
-                            finally { postAuthAction = null; }
-                        }
-                    },
-                });
-                gisInited = true;
-                console.log("GIS client initialized.");
-            } catch (e) { console.error("Error initializing GIS client:", e); }
-        }
-        
+        // These callbacks simply log success. We will check for the libraries directly later.
+        function gapiLibraryLoaded() { console.log("Google API library loaded."); }
+        function gisLibraryLoaded() { console.log("Google Sign-In library loaded."); }
+
+        // --- ALL OTHER APP LOGIC ---
         let clockInBtn, clockOutBtn, projectNameInput, timerDisplay, statusMessage, messageBox, messageText, messageOkBtn, breakBtn, breakTimerDisplay;
         let editTimeModal, editProjectName, editHoursInput, editMinutesInput, saveEventBtn, cancelEditBtn;
         let emojiPickerBtn, emojiModal, emojiGrid;
@@ -70,6 +39,7 @@
         let timerInterval = null, startTime = null, isClockedIn = false, breakStartTime = null, totalBreakTime = 0, pendingSaveData = null, selectedEmoji = null;
         let breakInterval = null, breakTimeLeft = 0;
         let breakState = 'idle';
+        let synth, audioReady = false, alarmInterval = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             clockInBtn = document.getElementById('clock-in-btn'); clockOutBtn = document.getElementById('clock-out-btn'); projectNameInput = document.getElementById('project-name');
@@ -80,12 +50,12 @@
             editMinutesInput = document.getElementById('edit-minutes'); saveEventBtn = document.getElementById('save-event-btn'); cancelEditBtn = document.getElementById('cancel-edit-btn');
             emojiPickerBtn = document.getElementById('emoji-picker-btn'); emojiModal = document.getElementById('emoji-modal'); emojiGrid = document.getElementById('emoji-grid');
             breakModal = document.getElementById('break-modal'); breakOptions = document.getElementById('break-options'); cancelBreakSelectionBtn = document.getElementById('cancel-break-selection-btn');
+            
             clockInBtn.addEventListener('click', startTimer); clockOutBtn.addEventListener('click', stopTimerAndShowEditModal); breakBtn.addEventListener('click', handleBreak);
             messageOkBtn.addEventListener('click', () => { messageBox.classList.add('hidden'); playSound('click'); });
             cancelEditBtn.addEventListener('click', () => {
                 playSound('click'); editTimeModal.classList.add('hidden');
                 if (isClockedIn) {
-                    // **THIS IS THE LINE I FIXED**
                     if (pendingSaveData && pendingSaveData.endTime) {
                         const pauseDuration = new Date() - pendingSaveData.endTime;
                         totalBreakTime += pauseDuration;
@@ -93,7 +63,7 @@
                     timerInterval = setInterval(updateTimerDisplay, 1000);
                 }
             });
-            saveEventBtn.addEventListener('click', saveEditedEvent);
+            saveEventBtn.addEventListener('click', handleAuthAndSave); // Changed to the new handler function
             emojiPickerBtn.addEventListener('click', () => { emojiModal.classList.remove('hidden'); playSound('click'); });
             emojiModal.addEventListener('click', (e) => { if (e.target === emojiModal) emojiModal.classList.add('hidden'); });
             cancelBreakSelectionBtn.addEventListener('click', () => {
@@ -106,6 +76,77 @@
             });
             populateEmojis(); populateBreakOptions();
         });
+
+        async function handleAuthAndSave() {
+            playSound('confirm');
+            clockOutBtn.disabled = true;
+            clockOutBtn.textContent = 'Authorizing...';
+
+            // **NEW ROBUST CHECKING**
+            // Check if the Google Sign-In library (GSI) failed to load.
+            if (typeof google === 'undefined' || typeof google.accounts === 'undefined') {
+                reportError('handleAuthAndSave', "The Google Sign-In script failed to load. This is often caused by ad-blockers or privacy extensions. Please disable them and reload the page.");
+                clockOutBtn.disabled = false; clockOutBtn.textContent = 'Clock Out';
+                return;
+            }
+
+            // Check if the Google API library (GAPI) failed to load.
+            if (typeof gapi === 'undefined' || typeof gapi.client === 'undefined') {
+                reportError('handleAuthAndSave', "The Google API script failed to load. This is often caused by ad-blockers or privacy extensions. Please disable them and reload the page.");
+                clockOutBtn.disabled = false; clockOutBtn.textContent = 'Clock Out';
+                return;
+            }
+
+            // If checks pass, initialize clients and request the token.
+            try {
+                // Initialize the GAPI client for the Calendar API
+                await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
+                await gapi.client.load('calendar', 'v3');
+
+                // Define what to do after the user signs in successfully
+                postAuthAction = async () => {
+                    clockOutBtn.textContent = 'Saving...';
+                    try {
+                        const editedHours = parseInt(editHoursInput.value, 10) || 0;
+                        const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
+                        const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
+                        const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
+                        await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
+                        showMessage(`Event created for "${pendingSaveData.projectName}"!`);
+                    } catch (error) {
+                        reportError('saveAction', error);
+                    } finally {
+                        clockOutBtn.textContent = 'Clock Out';
+                        resetState();
+                    }
+                };
+                
+                // Initialize the token client and trigger the pop-up
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID, scope: SCOPES,
+                    callback: async (tokenResponse) => {
+                        if (tokenResponse.error) {
+                            reportError('gisCallback', tokenResponse);
+                            resetState(); // Reset on auth failure
+                            return;
+                        }
+                        gapi.client.setToken({ access_token: tokenResponse.access_token });
+                        if (typeof postAuthAction === 'function') {
+                            await postAuthAction();
+                            postAuthAction = null;
+                        }
+                    },
+                });
+
+                editTimeModal.classList.add('hidden');
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+
+            } catch (error) {
+                reportError('handleAuthAndSave', error);
+                clockOutBtn.disabled = false; clockOutBtn.textContent = 'Clock Out';
+            }
+        }
+
         async function initAudio() { if (audioReady) return; await Tone.start(); synth = new Tone.Synth().toDestination(); audioReady = true; }
         function playSound(type) { if (!audioReady) return; const now = Tone.now(); if (type === 'click') synth.triggerAttackRelease("C4", "8n", now); if (type === 'confirm') synth.triggerAttackRelease("G4", "8n", now); if (type === 'alarm') { if (alarmInterval) return; alarmInterval = setInterval(() => { const alarmSynth = new Tone.Synth().toDestination(); const now = Tone.now(); alarmSynth.triggerAttackRelease("A5", "16n", now); alarmSynth.triggerAttackRelease("E5", "16n", now + 0.1); }, 400); setTimeout(() => stopSound('alarm'), 10000); } }
         function stopSound(type) { if (type === 'alarm' && alarmInterval) { clearInterval(alarmInterval); alarmInterval = null; } }
@@ -124,38 +165,6 @@
         async function createCalendarEvent(start, end, project, workedMs, emoji) { const totalMinutes = Math.floor(workedMs / 60000); const hours = Math.floor(totalMinutes / 60); const minutes = totalMinutes % 60; const eventTitle = `${emoji ? emoji + ' ' : ''}${project} - ${hours}h ${minutes}m (worked)`; const event = { 'summary': eventTitle, 'description': 'Time tracked via DA Time Tracker.', 'start': { 'dateTime': start.toISOString(), 'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone }, 'end': { 'dateTime': end.toISOString(), 'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone }, }; await gapi.client.calendar.events.insert({ 'calendarId': CALENDAR_ID, 'resource': event }); }
         function showMessage(message) { messageText.innerText = message; messageBox.classList.remove('hidden'); }
         function reportError(sourceFunction, errorObject) { console.error(`[${sourceFunction}]`, errorObject); const errorId = `E${Date.now().toString().slice(-6)}`; let detailedMessage = 'No details available.'; if (errorObject) { if (typeof errorObject === 'string') { detailedMessage = errorObject; } else if (errorObject.result?.error?.message) { detailedMessage = errorObject.result.error.message; } else if (errorObject.message) { detailedMessage = errorObject.message; } else if (errorObject.error) { detailedMessage = JSON.stringify(errorObject.error); } else { try { detailedMessage = JSON.stringify(errorObject, Object.getOwnPropertyNames(errorObject)); } catch { detailedMessage = 'Could not stringify the error object.'; } } } const userMessage = `An unexpected error occurred.\n\nPlease report the following code:\nID: ${errorId}\nSource: ${sourceFunction}\nDetails: ${detailedMessage}`; showMessage(userMessage); }
-
-        // --- MODIFIED FUNCTION FOR TESTING ---
-        function saveEditedEvent() {
-            console.log("Save event clicked. Running test without pre-check...");
-            if (!pendingSaveData) {
-                reportError("saveEditedEvent/pre-check", "No session data found to save.");
-                return;
-            }
-            editTimeModal.classList.add('hidden');
-            clockOutBtn.disabled = true;
-            clockOutBtn.textContent = 'Authorizing...';
-            playSound('confirm');
-            postAuthAction = async () => {
-                clockOutBtn.textContent = 'Saving...';
-                try {
-                    const editedHours = parseInt(editHoursInput.value, 10) || 0;
-                    const editedMinutes = parseInt(editMinutesInput.value, 10) || 0;
-                    const editedWorkedMs = (editedHours * 3600000) + (editedMinutes * 60000);
-                    const newStartTime = new Date(pendingSaveData.endTime.getTime() - editedWorkedMs);
-                    await createCalendarEvent(newStartTime, pendingSaveData.endTime, pendingSaveData.projectName, editedWorkedMs, pendingSaveData.selectedEmoji);
-                    showMessage(`Event created for "${pendingSaveData.projectName}"!`);
-                } catch (error) {
-                    reportError('saveEditedEvent/postAuthAction', error);
-                } finally {
-                    clockOutBtn.textContent = 'Clock Out';
-                    resetState();
-                }
-            };
-            console.log("Attempting to call tokenClient.requestAccessToken()...");
-            // This line is expected to cause a crash if the GSI script didn't load.
-            tokenClient.requestAccessToken({ prompt: 'consent' });
-        }
     </script>
 </head>
 <body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 flex items-center justify-center min-h-screen p-4">
