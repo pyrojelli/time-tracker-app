@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DA Time Tracker</title>
+    <title>DA Time Tracker (TESTING)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,7 +13,6 @@
     </style>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
-    
     <script async defer src="https://apis.google.com/js/api.js?onload=gapiLoaded"></script>
     <script async defer src="https://accounts.google.com/gsi/client?onload=gisLoaded"></script>
 
@@ -22,36 +21,22 @@
         const CLIENT_ID = '638799604524-qi2brhvvnve4k90mfg7ja3b7k0hds6u6.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyC9NDjM6pEKgMsGeyB97UzJqqvJBd47ISI';
         const CALENDAR_ID = 'ea8a510acb4eeaa186e9f9f39a2c5e9b342d8dd6773232b5ef7f3a020f61280b@group.calendar.google.com';
-        
-        // --- GOOGLE API SETUP ---
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
 
         let tokenClient;
-        let gapiInited = false;
-        let gisInited = false;
-        let postAuthAction = null;
-
-        // --- AUDIO SETUP ---
+        let gapiInited = false, gisInited = false, postAuthAction = null;
         let synth, audioReady = false, alarmInterval = null;
         
-        // --- INITIALIZATION (CALLED BY SCRIPT TAGS ONLOAD) ---
-        function gapiLoaded() {
-            gapi.load('client', initializeGapiClient);
-        }
-
+        function gapiLoaded() { gapi.load('client', initializeGapiClient); }
         async function initializeGapiClient() {
             try {
                 await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] });
                 await gapi.client.load('calendar', 'v3');
                 gapiInited = true;
                 console.log("GAPI client initialized.");
-            } catch (e) {
-                console.error("Error initializing GAPI client:", e);
-                reportError('initializeGapiClient', e);
-            }
+            } catch (e) { console.error("Error initializing GAPI client:", e); }
         }
-
         function gisLoaded() {
             try {
                 tokenClient = google.accounts.oauth2.initTokenClient({
@@ -75,136 +60,34 @@
                 });
                 gisInited = true;
                 console.log("GIS client initialized.");
-            } catch (e) {
-                console.error("Error initializing GIS client:", e);
-                reportError('gisLoaded', e);
-            }
+            } catch (e) { console.error("Error initializing GIS client:", e); }
         }
-    </script>
-</head>
-<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 flex items-center justify-center min-h-screen p-4">
-    <div class="w-full max-w-md mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 md:p-8 relative">
-        <div class="absolute top-4 right-4 flex items-center gap-2">
-            <a href="https://app.dataannotation.tech/workers/projects" target="_blank" rel="noopener noreferrer" title="DataAnnotation Dashboard" class="p-2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 transition hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-900 dark:hover:text-white transform hover:scale-110">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-            </a>
-            <a href="https://mynoise.net/NoiseMachines/openOfficeNoiseGenerator.php?l=59326545496470856122&a=1&am=s&title=Calm%20Office" target="_blank" rel="noopener noreferrer" title="Office Noise Generator" class="p-2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 transition hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-900 dark:hover:text-white transform hover:scale-110">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-            </a>
-            <a href="https://app.focusmate.com/dashboard" target="_blank" rel="noopener noreferrer" title="FocusMate Dashboard" class="p-2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 transition hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-900 dark:hover:text-white transform hover:scale-110">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-            </a>
-        </div>
-        <div class="text-center mb-6 pt-8">
-            <h1 class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">Time Tracker</h1>
-            <p class="text-slate-500 dark:text-slate-400 mt-1">For Data Annotation Projects</p>
-        </div>
-        <div id="app-screen">
-            <div class="mb-6">
-                <label for="project-name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Project Name</label>
-                <div class="flex items-center gap-2">
-                    <button id="emoji-picker-btn" class="flex-shrink-0 h-12 w-12 bg-slate-200 dark:bg-slate-700 rounded-lg flex items-center justify-center text-2xl transition hover:bg-slate-300 dark:hover:bg-slate-600">🎨</button>
-                    <input type="text" id="project-name" class="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="e.g., Image Classification">
-                </div>
-            </div>
-            <div class="bg-slate-100 dark:bg-slate-900/50 rounded-lg p-6 text-center mb-6">
-                <p id="timer-display" class="text-5xl md:text-6xl font-bold timer-display text-slate-900 dark:text-white">00:00:00</p>
-                <p id="break-timer-display" class="text-lg font-medium timer-display text-yellow-500 dark:text-yellow-400 h-6 mt-1"></p>
-                <p id="status-message" class="text-slate-500 dark:text-slate-400 mt-2">Ready to clock in.</p>
-            </div>
-            <div class="grid grid-cols-2 gap-4 mb-4">
-                <button id="clock-in-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition">Clock In</button>
-                <button id="clock-out-btn" disabled class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg disabled:bg-slate-400 dark:disabled:bg-slate-600">Clock Out</button>
-            </div>
-            <div class="mb-4">
-                 <button id="break-btn" disabled class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-4 rounded-lg transition disabled:bg-slate-400 dark:disabled:bg-slate-600">Start Break</button>
-            </div>
-        </div>
-        <div id="message-box" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
-                <p id="message-text" class="mb-4 whitespace-pre-wrap text-left"></p>
-                <button id="message-ok-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg">OK</button>
-            </div>
-        </div>
-        <div id="edit-time-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-8 max-w-sm w-full">
-                <h3 class="text-lg font-bold text-center mb-2 text-slate-900 dark:text-white">Edit & Save Event</h3>
-                <p id="edit-project-name" class="text-center text-slate-500 dark:text-slate-400 mb-6"></p>
-                <div class="flex items-center justify-center gap-4 mb-6">
-                    <div>
-                        <label for="edit-hours" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Hours</label>
-                        <input type="number" id="edit-hours" min="0" class="w-24 text-center mt-1 px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md">
-                    </div>
-                    <div>
-                        <label for="edit-minutes" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Minutes</label>
-                        <input type="number" id="edit-minutes" min="0" max="59" class="w-24 text-center mt-1 px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md">
-                    </div>
-                </div>
-                <div class="flex justify-between gap-4">
-                    <button id="cancel-edit-btn" class="w-full bg-slate-300 hover:bg-slate-400 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
-                    <button id="save-event-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Save Event</button>
-                </div>
-            </div>
-        </div>
-        <div id="emoji-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 max-w-sm w-full">
-                <h3 class="text-lg font-bold text-center mb-4 text-slate-900 dark:text-white">Choose an Emoji</h3>
-                <div id="emoji-grid" class="grid grid-cols-4 gap-4 text-3xl"></div>
-            </div>
-        </div>
-        <div id="break-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
-                <h3 class="text-lg font-bold mb-4 text-slate-900 dark:text-white">Choose Break Duration</h3>
-                <div id="break-options" class="grid grid-cols-2 gap-4"></div>
-                <button id="cancel-break-selection-btn" class="w-full mt-4 bg-slate-300 hover:bg-slate-400 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
-            </div>
-        </div>
-    </div>
-    <script>
+        
+        // --- ALL OTHER APP LOGIC ---
+        // (The rest of your app's functions are included here, with saveEditedEvent modified for the test)
         let clockInBtn, clockOutBtn, projectNameInput, timerDisplay, statusMessage, messageBox, messageText, messageOkBtn, breakBtn, breakTimerDisplay;
         let editTimeModal, editProjectName, editHoursInput, editMinutesInput, saveEventBtn, cancelEditBtn;
         let emojiPickerBtn, emojiModal, emojiGrid;
         let breakModal, breakOptions, cancelBreakSelectionBtn;
-        
         let timerInterval = null, startTime = null, isClockedIn = false, breakStartTime = null, totalBreakTime = 0, pendingSaveData = null, selectedEmoji = null;
         let breakInterval = null, breakTimeLeft = 0;
         let breakState = 'idle';
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Cache all DOM elements
-            clockInBtn = document.getElementById('clock-in-btn');
-            clockOutBtn = document.getElementById('clock-out-btn');
-            projectNameInput = document.getElementById('project-name');
-            timerDisplay = document.getElementById('timer-display');
-            statusMessage = document.getElementById('status-message');
-            messageBox = document.getElementById('message-box');
-            messageText = document.getElementById('message-text');
-            messageOkBtn = document.getElementById('message-ok-btn');
-            breakBtn = document.getElementById('break-btn');
-            breakTimerDisplay = document.getElementById('break-timer-display');
-            editTimeModal = document.getElementById('edit-time-modal');
-            editProjectName = document.getElementById('edit-project-name');
-            editHoursInput = document.getElementById('edit-hours');
-            editMinutesInput = document.getElementById('edit-minutes');
-            saveEventBtn = document.getElementById('save-event-btn');
-            cancelEditBtn = document.getElementById('cancel-edit-btn');
-            emojiPickerBtn = document.getElementById('emoji-picker-btn');
-            emojiModal = document.getElementById('emoji-modal');
-            emojiGrid = document.getElementById('emoji-grid');
-            breakModal = document.getElementById('break-modal');
-            breakOptions = document.getElementById('break-options');
-            cancelBreakSelectionBtn = document.getElementById('cancel-break-selection-btn');
-            
-            // Add event listeners
-            clockInBtn.addEventListener('click', startTimer);
-            clockOutBtn.addEventListener('click', stopTimerAndShowEditModal);
-            breakBtn.addEventListener('click', handleBreak);
+            clockInBtn = document.getElementById('clock-in-btn'); clockOutBtn = document.getElementById('clock-out-btn'); projectNameInput = document.getElementById('project-name');
+            timerDisplay = document.getElementById('timer-display'); statusMessage = document.getElementById('status-message'); messageBox = document.getElementById('message-box');
+            messageText = document.getElementById('message-text'); messageOkBtn = document.getElementById('message-ok-btn'); breakBtn = document.getElementById('break-btn');
+            breakTimerDisplay = document.getElementById('break-timer-display'); editTimeModal = document.getElementById('edit-time-modal');
+            editProjectName = document.getElementById('edit-project-name'); editHoursInput = document.getElementById('edit-hours');
+            editMinutesInput = document.getElementById('edit-minutes'); saveEventBtn = document.getElementById('save-event-btn'); cancelEditBtn = document.getElementById('cancel-edit-btn');
+            emojiPickerBtn = document.getElementById('emoji-picker-btn'); emojiModal = document.getElementById('emoji-modal'); emojiGrid = document.getElementById('emoji-grid');
+            breakModal = document.getElementById('break-modal'); breakOptions = document.getElementById('break-options'); cancelBreakSelectionBtn = document.getElementById('cancel-break-selection-btn');
+            clockInBtn.addEventListener('click', startTimer); clockOutBtn.addEventListener('click', stopTimerAndShowEditModal); breakBtn.addEventListener('click', handleBreak);
             messageOkBtn.addEventListener('click', () => { messageBox.classList.add('hidden'); playSound('click'); });
             cancelEditBtn.addEventListener('click', () => {
-                playSound('click');
-                editTimeModal.classList.add('hidden');
+                playSound('click'); editTimeModal.classList.add('hidden');
                 if (isClockedIn) {
-                    if (pendingSaveData && pendingSaveData.endTime) {
+                    if (pendingSaveData && pendingSaveДata.endTime) {
                         const pauseDuration = new Date() - pendingSaveData.endTime;
                         totalBreakTime += pauseDuration;
                     }
@@ -215,192 +98,45 @@
             emojiPickerBtn.addEventListener('click', () => { emojiModal.classList.remove('hidden'); playSound('click'); });
             emojiModal.addEventListener('click', (e) => { if (e.target === emojiModal) emojiModal.classList.add('hidden'); });
             cancelBreakSelectionBtn.addEventListener('click', () => {
-                 playSound('click');
-                 breakModal.classList.add('hidden');
+                 playSound('click'); breakModal.classList.add('hidden');
                  if(isClockedIn && breakStartTime) {
                      const pauseDuration = new Date() - breakStartTime;
-                     totalBreakTime += pauseDuration;
-                     breakStartTime = null;
+                     totalBreakTime += pauseDuration; breakStartTime = null;
                      timerInterval = setInterval(updateTimerDisplay, 1000);
                  }
             });
-
-            populateEmojis();
-            populateBreakOptions();
+            populateEmojis(); populateBreakOptions();
         });
-        
-        async function initAudio() {
-            if (audioReady) return;
-            await Tone.start();
-            synth = new Tone.Synth().toDestination();
-            audioReady = true;
-        }
-        
-        function playSound(type) {
-            if (!audioReady) return;
-            const now = Tone.now();
-            if (type === 'click') synth.triggerAttackRelease("C4", "8n", now);
-            if (type === 'confirm') synth.triggerAttackRelease("G4", "8n", now);
-            if (type === 'alarm') {
-                 if (alarmInterval) return;
-                 alarmInterval = setInterval(() => {
-                     const alarmSynth = new Tone.Synth().toDestination();
-                     const now = Tone.now();
-                     alarmSynth.triggerAttackRelease("A5", "16n", now);
-                     alarmSynth.triggerAttackRelease("E5", "16n", now + 0.1);
-                 }, 400);
-                 setTimeout(() => stopSound('alarm'), 10000); 
-            }
-        }
-        
-        function stopSound(type) {
-            if (type === 'alarm' && alarmInterval) {
-                clearInterval(alarmInterval);
-                alarmInterval = null;
-            }
-        }
+        async function initAudio() { if (audioReady) return; await Tone.start(); synth = new Tone.Synth().toDestination(); audioReady = true; }
+        function playSound(type) { if (!audioReady) return; const now = Tone.now(); if (type === 'click') synth.triggerAttackRelease("C4", "8n", now); if (type === 'confirm') synth.triggerAttackRelease("G4", "8n", now); if (type === 'alarm') { if (alarmInterval) return; alarmInterval = setInterval(() => { const alarmSynth = new Tone.Synth().toDestination(); const now = Tone.now(); alarmSynth.triggerAttackRelease("A5", "16n", now); alarmSynth.triggerAttackRelease("E5", "16n", now + 0.1); }, 400); setTimeout(() => stopSound('alarm'), 10000); } }
+        function stopSound(type) { if (type === 'alarm' && alarmInterval) { clearInterval(alarmInterval); alarmInterval = null; } }
+        function populateEmojis() { const emojis = ["💡", "🖱️", "⌨️", "🖼️", "🏷️", "✍️", "🤖", "🧠", "⚙️", "🔗", "🎯", "🔎", "🎧", "🧩", "🧑‍💻", "✨"]; emojis.forEach(emoji => { const button = document.createElement('button'); button.textContent = emoji; button.className = 'p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition'; button.onclick = () => selectEmoji(emoji); emojiGrid.appendChild(button); }); }
+        function populateBreakOptions() { const durations = [5, 10, 15, 30]; durations.forEach(min => { const button = document.createElement('button'); button.textContent = `${min} min`; button.dataset.minutes = min; button.className = 'w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition'; button.onclick = () => startBreak(min); breakOptions.appendChild(button); }); }
+        function selectEmoji(emoji) { playSound('click'); selectedEmoji = emoji; emojiPickerBtn.textContent = emoji; emojiModal.classList.add('hidden'); }
+        async function startTimer() { const projectName = projectNameInput.value.trim(); if (!projectName) { showMessage("Please enter a project name."); return; } await initAudio(); playSound('confirm'); startTime = new Date(); isClockedIn = true; clockInBtn.disabled = true; clockOutBtn.disabled = false; breakBtn.disabled = false; projectNameInput.disabled = true; emojiPickerBtn.disabled = true; statusMessage.textContent = `Clocked in for: ${selectedEmoji ? selectedEmoji + ' ' : ''}${projectName}`; statusMessage.classList.add('text-green-500'); timerInterval = setInterval(updateTimerDisplay, 1000); updateTimerDisplay(); }
+        function handleBreak() { playSound('click'); if (breakState === 'idle') { clearInterval(timerInterval); breakStartTime = new Date(); breakModal.classList.remove('hidden'); } else if (breakState === 'active' || breakState === 'finished') { resumeWork(); } }
+        function startBreak(minutes) { playSound('confirm'); breakModal.classList.add('hidden'); breakState = 'active'; breakTimeLeft = minutes * 60; breakInterval = setInterval(updateBreakTimer, 1000); breakBtn.textContent = 'End Break'; breakBtn.classList.replace('bg-sky-500', 'bg-yellow-500'); breakBtn.classList.replace('hover:bg-sky-600', 'hover:bg-yellow-600'); statusMessage.textContent = "On Break"; }
+        function finishBreak() { clearInterval(breakInterval); breakState = 'finished'; playSound('alarm'); statusMessage.textContent = "Break's Over!"; breakTimerDisplay.textContent = '00:00'; breakBtn.textContent = 'Resume Work'; breakBtn.classList.replace('bg-yellow-500', 'bg-green-500'); breakBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-green-600'); }
+        function resumeWork() { stopSound('alarm'); if (breakStartTime) { totalBreakTime += new Date() - breakStartTime; breakStartTime = null; } breakState = 'idle'; breakTimerDisplay.textContent = ''; breakBtn.textContent = 'Start Break'; breakBtn.classList.remove('bg-yellow-500', 'bg-green-500', 'hover:bg-yellow-600', 'hover:bg-green-600'); breakBtn.classList.add('bg-sky-500', 'hover:bg-sky-600'); statusMessage.textContent = `Clocked in for: ${selectedEmoji ? selectedEmoji + ' ' : ''}${projectNameInput.value.trim()}`; timerInterval = setInterval(updateTimerDisplay, 1000); }
+        function updateBreakTimer() { breakTimeLeft--; const minutes = Math.floor(breakTimeLeft / 60); const seconds = breakTimeLeft % 60; breakTimerDisplay.textContent = `Break ends in: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; if (breakTimeLeft <= 0) finishBreak(); }
+        function stopTimerAndShowEditModal() { if (!isClockedIn) return; playSound('confirm'); if (breakState === 'active' || breakState === 'finished') { stopSound('alarm'); if (breakStartTime) totalBreakTime += new Date() - breakStartTime; } clearInterval(timerInterval); clearInterval(breakInterval); const endTime = new Date(); pendingSaveData = { startTime, endTime, projectName: projectNameInput.value.trim(), selectedEmoji }; const workedDurationMs = (endTime - startTime) - totalBreakTime; const totalMinutes = Math.floor(workedDurationMs / 60000); editProjectName.textContent = `For: "${selectedEmoji ? selectedEmoji + ' ' : ''}${pendingSaveData.projectName}"`; editHoursInput.value = Math.floor(totalMinutes / 60); editMinutesInput.value = totalMinutes % 60; editTimeModal.classList.remove('hidden'); }
+        function resetState() { isClockedIn = false; breakState = 'idle'; startTime = null; breakStartTime = null; totalBreakTime = 0; pendingSaveData = null; selectedEmoji = null; stopSound('alarm'); clearInterval(timerInterval); clearInterval(breakInterval); timerInterval = null; breakInterval = null; clockInBtn.disabled = false; clockOutBtn.disabled = true; projectNameInput.disabled = false; emojiPickerBtn.disabled = false; breakBtn.disabled = true; breakBtn.textContent = 'Start Break'; breakBtn.classList.remove('bg-yellow-500', 'bg-green-500', 'hover:bg-yellow-600', 'hover:bg-green-600'); breakBtn.classList.add('bg-sky-500', 'hover:bg-sky-600'); projectNameInput.value = ''; emojiPickerBtn.textContent = '🎨'; timerDisplay.textContent = '00:00:00'; breakTimerDisplay.textContent = ''; statusMessage.textContent = 'Ready to clock in.'; statusMessage.classList.remove('text-green-500'); }
+        function updateTimerDisplay() { if (!startTime) return; const workedTime = (new Date() - startTime) - totalBreakTime; const hours = Math.floor(workedTime / 3600000); const minutes = Math.floor((workedTime % 3600000) / 60000); const seconds = Math.floor((workedTime % 60000) / 1000); timerDisplay.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; }
+        async function createCalendarEvent(start, end, project, workedMs, emoji) { const totalMinutes = Math.floor(workedMs / 60000); const hours = Math.floor(totalMinutes / 60); const minutes = totalMinutes % 60; const eventTitle = `${emoji ? emoji + ' ' : ''}${project} - ${hours}h ${minutes}m (worked)`; const event = { 'summary': eventTitle, 'description': 'Time tracked via DA Time Tracker.', 'start': { 'dateTime': start.toISOString(), 'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone }, 'end': { 'dateTime': end.toISOString(), 'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone }, }; await gapi.client.calendar.events.insert({ 'calendarId': CALENDAR_ID, 'resource': event }); }
+        function showMessage(message) { messageText.innerText = message; messageBox.classList.remove('hidden'); }
+        function reportError(sourceFunction, errorObject) { console.error(`[${sourceFunction}]`, errorObject); const errorId = `E${Date.now().toString().slice(-6)}`; let detailedMessage = 'No details available.'; if (errorObject) { if (typeof errorObject === 'string') { detailedMessage = errorObject; } else if (errorObject.result?.error?.message) { detailedMessage = errorObject.result.error.message; } else if (errorObject.message) { detailedMessage = errorObject.message; } else if (errorObject.error) { detailedMessage = JSON.stringify(errorObject.error); } else { try { detailedMessage = JSON.stringify(errorObject, Object.getOwnPropertyNames(errorObject)); } catch { detailedMessage = 'Could not stringify the error object.'; } } } const userMessage = `An unexpected error occurred.\n\nPlease report the following code:\nID: ${errorId}\nSource: ${sourceFunction}\nDetails: ${detailedMessage}`; showMessage(userMessage); }
 
-        function populateEmojis() {
-            const emojis = ["💡", "🖱️", "⌨️", "🖼️", "🏷️", "✍️", "🤖", "🧠", "⚙️", "🔗", "🎯", "🔎", "🎧", "🧩", "🧑‍💻", "✨"];
-            emojis.forEach(emoji => {
-                const button = document.createElement('button');
-                button.textContent = emoji;
-                button.className = 'p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition';
-                button.onclick = () => selectEmoji(emoji);
-                emojiGrid.appendChild(button);
-            });
-        }
-        
-        function populateBreakOptions() {
-            const durations = [5, 10, 15, 30];
-            durations.forEach(min => {
-                const button = document.createElement('button');
-                button.textContent = `${min} min`;
-                button.dataset.minutes = min;
-                button.className = 'w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition';
-                button.onclick = () => startBreak(min);
-                breakOptions.appendChild(button);
-            });
-        }
-
-        function selectEmoji(emoji) {
-            playSound('click');
-            selectedEmoji = emoji;
-            emojiPickerBtn.textContent = emoji;
-            emojiModal.classList.add('hidden');
-        }
-
-        async function startTimer() {
-            const projectName = projectNameInput.value.trim();
-            if (!projectName) { showMessage("Please enter a project name."); return; }
-            await initAudio();
-            playSound('confirm');
-            startTime = new Date();
-            isClockedIn = true;
-            clockInBtn.disabled = true;
-            clockOutBtn.disabled = false;
-            breakBtn.disabled = false;
-            projectNameInput.disabled = true;
-            emojiPickerBtn.disabled = true;
-            statusMessage.textContent = `Clocked in for: ${selectedEmoji ? selectedEmoji + ' ' : ''}${projectName}`;
-            statusMessage.classList.add('text-green-500');
-            timerInterval = setInterval(updateTimerDisplay, 1000);
-            updateTimerDisplay();
-        }
-
-        function handleBreak() {
-            playSound('click');
-            if (breakState === 'idle') {
-                clearInterval(timerInterval);
-                breakStartTime = new Date(); 
-                breakModal.classList.remove('hidden');
-            } else if (breakState === 'active' || breakState === 'finished') {
-                resumeWork();
-            }
-        }
-        
-        function startBreak(minutes) {
-            playSound('confirm');
-            breakModal.classList.add('hidden');
-            breakState = 'active';
-            breakTimeLeft = minutes * 60;
-            breakInterval = setInterval(updateBreakTimer, 1000);
-            breakBtn.textContent = 'End Break';
-            breakBtn.classList.replace('bg-sky-500', 'bg-yellow-500');
-            breakBtn.classList.replace('hover:bg-sky-600', 'hover:bg-yellow-600');
-            statusMessage.textContent = "On Break";
-        }
-        
-        function finishBreak() {
-            clearInterval(breakInterval);
-            breakState = 'finished';
-            playSound('alarm');
-            statusMessage.textContent = "Break's Over!";
-            breakTimerDisplay.textContent = '00:00';
-            breakBtn.textContent = 'Resume Work';
-            breakBtn.classList.replace('bg-yellow-500', 'bg-green-500');
-            breakBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-green-600');
-        }
-        
-        function resumeWork() {
-            stopSound('alarm');
-            if (breakStartTime) {
-                totalBreakTime += new Date() - breakStartTime;
-                breakStartTime = null;
-            }
-            breakState = 'idle';
-            breakTimerDisplay.textContent = '';
-            breakBtn.textContent = 'Start Break';
-            breakBtn.classList.remove('bg-yellow-500', 'bg-green-500', 'hover:bg-yellow-600', 'hover:bg-green-600');
-            breakBtn.classList.add('bg-sky-500', 'hover:bg-sky-600');
-            statusMessage.textContent = `Clocked in for: ${selectedEmoji ? selectedEmoji + ' ' : ''}${projectNameInput.value.trim()}`;
-            timerInterval = setInterval(updateTimerDisplay, 1000);
-        }
-        
-        function updateBreakTimer() {
-            breakTimeLeft--;
-            const minutes = Math.floor(breakTimeLeft / 60);
-            const seconds = breakTimeLeft % 60;
-            breakTimerDisplay.textContent = `Break ends in: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-            if (breakTimeLeft <= 0) finishBreak();
-        }
-
-        function stopTimerAndShowEditModal() {
-            if (!isClockedIn) return;
-            playSound('confirm');
-            if (breakState === 'active' || breakState === 'finished') {
-                stopSound('alarm');
-                if (breakStartTime) totalBreakTime += new Date() - breakStartTime;
-            }
-            clearInterval(timerInterval);
-            clearInterval(breakInterval);
-            const endTime = new Date();
-            pendingSaveData = { startTime, endTime, projectName: projectNameInput.value.trim(), selectedEmoji };
-            const workedDurationMs = (endTime - startTime) - totalBreakTime;
-            const totalMinutes = Math.floor(workedDurationMs / 60000);
-            editProjectName.textContent = `For: "${selectedEmoji ? selectedEmoji + ' ' : ''}${pendingSaveData.projectName}"`;
-            editHoursInput.value = Math.floor(totalMinutes / 60);
-            editMinutesInput.value = totalMinutes % 60;
-            editTimeModal.classList.remove('hidden');
-        }
-        
+        // --- MODIFIED FUNCTION FOR TESTING ---
         function saveEditedEvent() {
-            console.log("Save event clicked.");
+            console.log("Save event clicked. Running test without pre-check...");
             if (!pendingSaveData) {
                 reportError("saveEditedEvent/pre-check", "No session data found to save.");
                 return;
             }
-
-            if (!gapiInited || !gisInited || !tokenClient) {
-                reportError("saveEditedEvent/pre-check", "Google services could not be initialized. This might be due to a network issue or a browser extension (like an ad-blocker) preventing connection to Google's servers. Please reload the page and try again.");
-                return;
-            }
-
             editTimeModal.classList.add('hidden');
             clockOutBtn.disabled = true;
             clockOutBtn.textContent = 'Authorizing...';
             playSound('confirm');
-
             postAuthAction = async () => {
                 clockOutBtn.textContent = 'Saving...';
                 try {
@@ -417,91 +153,9 @@
                     resetState();
                 }
             };
-            
-            // This forces the consent screen to appear for the user.
+            console.log("Attempting to call tokenClient.requestAccessToken()...");
+            // This line is expected to cause a crash if the GSI script didn't load.
             tokenClient.requestAccessToken({ prompt: 'consent' });
-        }
-
-        function resetState() {
-            isClockedIn = false;
-            breakState = 'idle';
-            startTime = null;
-            breakStartTime = null;
-            totalBreakTime = 0;
-            pendingSaveData = null;
-            selectedEmoji = null;
-            stopSound('alarm');
-            clearInterval(timerInterval);
-            clearInterval(breakInterval);
-            timerInterval = null;
-            breakInterval = null;
-            clockInBtn.disabled = false;
-            clockOutBtn.disabled = true;
-            projectNameInput.disabled = false;
-            emojiPickerBtn.disabled = false;
-            breakBtn.disabled = true;
-            breakBtn.textContent = 'Start Break';
-            breakBtn.classList.remove('bg-yellow-500', 'bg-green-500', 'hover:bg-yellow-600', 'hover:bg-green-600');
-            breakBtn.classList.add('bg-sky-500', 'hover:bg-sky-600');
-            projectNameInput.value = '';
-            emojiPickerBtn.textContent = '🎨';
-            timerDisplay.textContent = '00:00:00';
-            breakTimerDisplay.textContent = '';
-            statusMessage.textContent = 'Ready to clock in.';
-            statusMessage.classList.remove('text-green-500');
-        }
-
-        function updateTimerDisplay() {
-            if (!startTime) return;
-            const workedTime = (new Date() - startTime) - totalBreakTime;
-            const hours = Math.floor(workedTime / 3600000);
-            const minutes = Math.floor((workedTime % 3600000) / 60000);
-            const seconds = Math.floor((workedTime % 60000) / 1000);
-            timerDisplay.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-        }
-
-        async function createCalendarEvent(start, end, project, workedMs, emoji) {
-            const totalMinutes = Math.floor(workedMs / 60000);
-            const hours = Math.floor(totalMinutes / 60);
-            const minutes = totalMinutes % 60;
-            const eventTitle = `${emoji ? emoji + ' ' : ''}${project} - ${hours}h ${minutes}m (worked)`;
-            const event = {
-                'summary': eventTitle, 'description': 'Time tracked via DA Time Tracker.',
-                'start': { 'dateTime': start.toISOString(), 'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone },
-                'end': { 'dateTime': end.toISOString(), 'timeZone': Intl.DateTimeFormat().resolvedOptions().timeZone },
-            };
-            await gapi.client.calendar.events.insert({ 'calendarId': CALENDAR_ID, 'resource': event });
-        }
-        function showMessage(message) {
-            messageText.innerText = message;
-            messageBox.classList.remove('hidden');
-        }
-
-        function reportError(sourceFunction, errorObject) {
-            console.error(`[${sourceFunction}]`, errorObject);
-
-            const errorId = `E${Date.now().toString().slice(-6)}`;
-            let detailedMessage = 'No details available.';
-            if (errorObject) {
-                if (typeof errorObject === 'string') {
-                    detailedMessage = errorObject;
-                } else if (errorObject.result?.error?.message) {
-                    detailedMessage = errorObject.result.error.message;
-                } else if (errorObject.message) {
-                    detailedMessage = errorObject.message;
-                } else if (errorObject.error) {
-                    detailedMessage = JSON.stringify(errorObject.error);
-                } else {
-                    try {
-                        detailedMessage = JSON.stringify(errorObject, Object.getOwnPropertyNames(errorObject));
-                    } catch {
-                        detailedMessage = 'Could not stringify the error object.';
-                    }
-                }
-            }
-
-            const userMessage = `An unexpected error occurred.\n\nPlease report the following code:\nID: ${errorId}\nSource: ${sourceFunction}\nDetails: ${detailedMessage}`;
-            showMessage(userMessage);
         }
     </script>
 </body>
