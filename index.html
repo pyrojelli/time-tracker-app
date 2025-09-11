@@ -63,8 +63,6 @@
             } catch (e) { console.error("Error initializing GIS client:", e); }
         }
         
-        // --- ALL OTHER APP LOGIC ---
-        // (The rest of your app's functions are included here, with saveEditedEvent modified for the test)
         let clockInBtn, clockOutBtn, projectNameInput, timerDisplay, statusMessage, messageBox, messageText, messageOkBtn, breakBtn, breakTimerDisplay;
         let editTimeModal, editProjectName, editHoursInput, editMinutesInput, saveEventBtn, cancelEditBtn;
         let emojiPickerBtn, emojiModal, emojiGrid;
@@ -87,7 +85,8 @@
             cancelEditBtn.addEventListener('click', () => {
                 playSound('click'); editTimeModal.classList.add('hidden');
                 if (isClockedIn) {
-                    if (pendingSaveData && pendingSaveДata.endTime) {
+                    // **THIS IS THE LINE I FIXED**
+                    if (pendingSaveData && pendingSaveData.endTime) {
                         const pauseDuration = new Date() - pendingSaveData.endTime;
                         totalBreakTime += pauseDuration;
                     }
@@ -158,5 +157,84 @@
             tokenClient.requestAccessToken({ prompt: 'consent' });
         }
     </script>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-md mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 md:p-8 relative">
+        <div class="absolute top-4 right-4 flex items-center gap-2">
+            <a href="https://app.dataannotation.tech/workers/projects" target="_blank" rel="noopener noreferrer" title="DataAnnotation Dashboard" class="p-2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 transition hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-900 dark:hover:text-white transform hover:scale-110">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+            </a>
+            <a href="https://mynoise.net/NoiseMachines/openOfficeNoiseGenerator.php?l=59326545496470856122&a=1&am=s&title=Calm%20Office" target="_blank" rel="noopener noreferrer" title="Office Noise Generator" class="p-2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 transition hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-900 dark:hover:text-white transform hover:scale-110">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+            </a>
+            <a href="https://app.focusmate.com/dashboard" target="_blank" rel="noopener noreferrer" title="FocusMate Dashboard" class="p-2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 transition hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-900 dark:hover:text-white transform hover:scale-110">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+            </a>
+        </div>
+        <div class="text-center mb-6 pt-8">
+            <h1 class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">Time Tracker</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">For Data Annotation Projects</p>
+        </div>
+        <div id="app-screen">
+            <div class="mb-6">
+                <label for="project-name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Project Name</label>
+                <div class="flex items-center gap-2">
+                    <button id="emoji-picker-btn" class="flex-shrink-0 h-12 w-12 bg-slate-200 dark:bg-slate-700 rounded-lg flex items-center justify-center text-2xl transition hover:bg-slate-300 dark:hover:bg-slate-600">🎨</button>
+                    <input type="text" id="project-name" class="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="e.g., Image Classification">
+                </div>
+            </div>
+            <div class="bg-slate-100 dark:bg-slate-900/50 rounded-lg p-6 text-center mb-6">
+                <p id="timer-display" class="text-5xl md:text-6xl font-bold timer-display text-slate-900 dark:text-white">00:00:00</p>
+                <p id="break-timer-display" class="text-lg font-medium timer-display text-yellow-500 dark:text-yellow-400 h-6 mt-1"></p>
+                <p id="status-message" class="text-slate-500 dark:text-slate-400 mt-2">Ready to clock in.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <button id="clock-in-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition">Clock In</button>
+                <button id="clock-out-btn" disabled class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg disabled:bg-slate-400 dark:disabled:bg-slate-600">Clock Out</button>
+            </div>
+            <div class="mb-4">
+                 <button id="break-btn" disabled class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-4 rounded-lg transition disabled:bg-slate-400 dark:disabled:bg-slate-600">Start Break</button>
+            </div>
+        </div>
+        <div id="message-box" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
+                <p id="message-text" class="mb-4 whitespace-pre-wrap text-left"></p>
+                <button id="message-ok-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg">OK</button>
+            </div>
+        </div>
+        <div id="edit-time-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-8 max-w-sm w-full">
+                <h3 class="text-lg font-bold text-center mb-2 text-slate-900 dark:text-white">Edit & Save Event</h3>
+                <p id="edit-project-name" class="text-center text-slate-500 dark:text-slate-400 mb-6"></p>
+                <div class="flex items-center justify-center gap-4 mb-6">
+                    <div>
+                        <label for="edit-hours" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Hours</label>
+                        <input type="number" id="edit-hours" min="0" class="w-24 text-center mt-1 px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md">
+                    </div>
+                    <div>
+                        <label for="edit-minutes" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Minutes</label>
+                        <input type="number" id="edit-minutes" min="0" max="59" class="w-24 text-center mt-1 px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md">
+                    </div>
+                </div>
+                <div class="flex justify-between gap-4">
+                    <button id="cancel-edit-btn" class="w-full bg-slate-300 hover:bg-slate-400 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                    <button id="save-event-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Save Event</button>
+                </div>
+            </div>
+        </div>
+        <div id="emoji-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 max-w-sm w-full">
+                <h3 class="text-lg font-bold text-center mb-4 text-slate-900 dark:text-white">Choose an Emoji</h3>
+                <div id="emoji-grid" class="grid grid-cols-4 gap-4 text-3xl"></div>
+            </div>
+        </div>
+        <div id="break-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
+                <h3 class="text-lg font-bold mb-4 text-slate-900 dark:text-white">Choose Break Duration</h3>
+                <div id="break-options" class="grid grid-cols-2 gap-4"></div>
+                <button id="cancel-break-selection-btn" class="w-full mt-4 bg-slate-300 hover:bg-slate-400 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
